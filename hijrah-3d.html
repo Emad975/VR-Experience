@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<title>الهجرة النبوية الغامرة — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<link rel="stylesheet" href="css/xrlab.css"/>
+</head>
+<body>
+
+<div id="scene"></div>
+
+<header class="hud-header">
+  <a href="history.html" class="hud-back">← رجوع</a>
+  <div class="hud-title">📜 الهجرة النبوية <span>الغامرة</span></div>
+  <a href="hijrah.html" class="hud-2d">🗺️ الوضع المبسّط 2D</a>
+</header>
+
+<div class="hint glass" id="hint">🖱️ اسحب للدوران حول الخريطة — انقر أي محطة لقراءة قصتها · شغّل «الرحلة» لتتبّع المسار</div>
+
+<!-- mirrored into the in-VR control panel automatically -->
+<div class="ctl-bar glass">
+  <button class="ctl-btn" id="btn-prev">◀ المحطة السابقة</button>
+  <button class="ctl-btn on" id="btn-play">▶ تشغيل الرحلة</button>
+  <button class="ctl-btn" id="btn-next">المحطة التالية ▶</button>
+</div>
+
+<script src="js/vendor/three.min.js"></script>
+<script src="js/vendor/OrbitControls.js"></script>
+<script src="js/vendor/VRButton.js"></script>
+<script src="js/xrlab.js"></script>
+<script>
+(function(){
+'use strict';
+
+var lab=XRLab.init({cameraPos:[0,5.8,8.2],target:[0,0.8,-1.6],maxDistance:30,minDistance:1.2,fog:.01});
+var scene=lab.scene;
+
+var TY=0.95;            /* table top height */
+
+/* ───────────────────── stations (no human figures) ───────────────────── */
+var STATIONS=[
+  {key:'mecca', name:'مكة المكرّمة', color:0xfbbf24,
+   pos:new THREE.Vector3( 3.2,TY, 3.0),
+   desc:'في ليلة الهجرة أحاط المشركون بالبيت، فخرج النبي ﷺ من مكة سرّاً مع صاحبه، وبدأت الرحلة المباركة نحو المدينة.'},
+  {key:'thawr', name:'غار ثَوْر', color:0x93c5fd,
+   pos:new THREE.Vector3( 3.9,TY, 4.4),
+   desc:'اتّجها جنوباً إلى غار ثور واختبآ فيه ثلاث ليالٍ. نسج العنكبوت خيوطه على الباب وعشّش الحمام، فظنّ المطاردون أن لا أحد بالداخل.'},
+  {key:'coast', name:'الطريق الساحلي', color:0x34d399,
+   pos:new THREE.Vector3( 0.4,TY, 0.8),
+   desc:'سلك الدليل طريقاً غير مألوف بمحاذاة ساحل البحر الأحمر لتضليل المطاردين، ثم اتّجه شمالاً نحو يثرب.'},
+  {key:'quba', name:'قُباء', color:0xa78bfa,
+   pos:new THREE.Vector3(-2.9,TY,-3.9),
+   desc:'وصل إلى قُباء على أطراف المدينة، وأسّس فيها مسجد قُباء، وهو أول مسجد بُني في الإسلام.'},
+  {key:'medina', name:'المدينة المنوّرة', color:0x4ade80,
+   pos:new THREE.Vector3(-3.8,TY,-5.6),
+   desc:'دخل المدينة فاستقبله أهلها بالفرح والأناشيد، وبُني المسجد النبوي، وقامت دولة الإسلام الأولى.'}
+];
+
+/* ───────────────────── desert table / terrain ───────────────────── */
+(function(){
+  var top=new THREE.Mesh(
+    new THREE.CylinderGeometry(8.2,8.4,0.4,60),
+    new THREE.MeshStandardMaterial({color:0xc2a06a,roughness:.95,metalness:0})
+  );
+  top.position.set(-0.3,TY-0.2,-1.0);
+  scene.add(top);
+  /* low dunes */
+  for(var i=0;i<22;i++){
+    var a=Math.random()*Math.PI*2, r=Math.random()*7;
+    var d=new THREE.Mesh(new THREE.SphereGeometry(0.5+Math.random()*0.9,12,8),
+      new THREE.MeshStandardMaterial({color:0xb8965f,roughness:1}));
+    d.scale.y=0.28;
+    d.position.set(-0.3+Math.cos(a)*r, TY-0.02, -1.0+Math.sin(a)*r);
+    scene.add(d);
+  }
+  /* a strip of sea (Red Sea) along the far western edge, clear of the cities */
+  var sea=new THREE.Mesh(new THREE.PlaneGeometry(2.6,12),
+    new THREE.MeshStandardMaterial({color:0x1d5e8a,roughness:.3,metalness:.2,transparent:true,opacity:.92}));
+  sea.rotation.x=-Math.PI/2;
+  sea.position.set(-6.4,TY+0.01,-1.0);
+  scene.add(sea);
+})();
+
+/* ───────────────────── landmark models (no people) ───────────────────── */
+function palm(x,z,s){
+  s=s||1;var g=new THREE.Group();
+  var t=new THREE.Mesh(new THREE.CylinderGeometry(0.03*s,0.05*s,0.5*s,8),
+    new THREE.MeshStandardMaterial({color:0x6b4f2a,roughness:1}));
+  t.position.y=0.25*s;g.add(t);
+  for(var i=0;i<6;i++){
+    var f=new THREE.Mesh(new THREE.ConeGeometry(0.05*s,0.36*s,6),
+      new THREE.MeshStandardMaterial({color:0x2f7d4f,roughness:1}));
+    f.position.y=0.5*s;f.rotation.z=Math.PI/2.4;f.rotation.y=i/6*Math.PI*2;
+    f.translateY(0.16*s);g.add(f);
+  }
+  g.position.set(x,TY,z);return g;
+}
+function kaaba(){
+  var g=new THREE.Group();
+  var c=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.55,0.5),
+    new THREE.MeshStandardMaterial({color:0x0b0b0d,roughness:.7,metalness:.2}));
+  c.position.y=0.28;g.add(c);
+  var band=new THREE.Mesh(new THREE.BoxGeometry(0.52,0.07,0.52),
+    new THREE.MeshStandardMaterial({color:0xd4af37,metalness:.8,roughness:.3,emissive:0x5a4500,emissiveIntensity:.4}));
+  band.position.y=0.42;g.add(band);
+  return g;
+}
+function caveMound(){
+  var g=new THREE.Group();
+  var rock=new THREE.Mesh(new THREE.IcosahedronGeometry(0.55,0),
+    new THREE.MeshStandardMaterial({color:0x6b6f78,roughness:1,flatShading:true}));
+  rock.scale.set(1,0.8,1);rock.position.y=0.32;g.add(rock);
+  /* dark opening */
+  var open=new THREE.Mesh(new THREE.CircleGeometry(0.16,16),
+    new THREE.MeshBasicMaterial({color:0x05060a}));
+  open.position.set(0,0.3,0.42);g.add(open);
+  /* spider web across the opening */
+  var webMat=new THREE.LineBasicMaterial({color:0xcbd5e1,transparent:true,opacity:.5});
+  for(var i=0;i<8;i++){
+    var ang=i/8*Math.PI*2;
+    var gw=new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0,0.3,0.43),
+      new THREE.Vector3(Math.cos(ang)*0.17,0.3+Math.sin(ang)*0.17,0.43)]);
+    g.add(new THREE.Line(gw,webMat));
+  }
+  for(var rr=0.05;rr<0.18;rr+=0.05){
+    var pts=[];
+    for(var k=0;k<=16;k++){var a=k/16*Math.PI*2;pts.push(new THREE.Vector3(Math.cos(a)*rr,0.3+Math.sin(a)*rr,0.43));}
+    g.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts),webMat));
+  }
+  /* a white dove (bird — no humans) */
+  var dove=new THREE.Group();
+  var body=new THREE.Mesh(new THREE.SphereGeometry(0.05,10,8),new THREE.MeshStandardMaterial({color:0xffffff,emissive:0x556,emissiveIntensity:.2}));
+  dove.add(body);
+  var wing=new THREE.Mesh(new THREE.ConeGeometry(0.04,0.12,6),new THREE.MeshStandardMaterial({color:0xeef2ff}));
+  wing.rotation.z=Math.PI/2;wing.position.x=0.06;dove.add(wing);
+  dove.position.set(0.28,0.5,0.4);g.add(dove);
+  return g;
+}
+function mosque(domeColor,scale){
+  scale=scale||1;var g=new THREE.Group();
+  var base=new THREE.Mesh(new THREE.BoxGeometry(0.6*scale,0.34*scale,0.6*scale),
+    new THREE.MeshStandardMaterial({color:0xe8dcc0,roughness:.9}));
+  base.position.y=0.17*scale;g.add(base);
+  var dome=new THREE.Mesh(new THREE.SphereGeometry(0.22*scale,18,12,0,Math.PI*2,0,Math.PI/2),
+    new THREE.MeshStandardMaterial({color:domeColor,roughness:.5,metalness:.3,emissive:domeColor,emissiveIntensity:.18}));
+  dome.position.y=0.34*scale;g.add(dome);
+  var min=new THREE.Mesh(new THREE.CylinderGeometry(0.04*scale,0.05*scale,0.7*scale,10),
+    new THREE.MeshStandardMaterial({color:0xf2ecd8,roughness:.9}));
+  min.position.set(0.34*scale,0.35*scale,0.34*scale);g.add(min);
+  var cap=new THREE.Mesh(new THREE.ConeGeometry(0.06*scale,0.12*scale,10),
+    new THREE.MeshStandardMaterial({color:domeColor,emissive:domeColor,emissiveIntensity:.2}));
+  cap.position.set(0.34*scale,0.74*scale,0.34*scale);g.add(cap);
+  return g;
+}
+
+/* place landmarks at their stations */
+function at(st,obj){obj.position.set(st.pos.x,TY,st.pos.z);scene.add(obj);return obj;}
+at(byKey('mecca'),kaaba());
+at(byKey('thawr'),caveMound());
+at(byKey('quba'),mosque(0xffffff,1));
+var medinaModel=mosque(0x16a34a,1.25);medinaModel.position.set(byKey('medina').pos.x,TY,byKey('medina').pos.z);scene.add(medinaModel);
+function byKey(k){for(var i=0;i<STATIONS.length;i++)if(STATIONS[i].key===k)return STATIONS[i];}
+/* scatter palms near medina & quba */
+[[-2.4,-3.4],[-3.4,-4.4],[-4.3,-6.0],[-3.1,-6.2]].forEach(function(p){scene.add(palm(p[0],p[1],0.9));});
+/* sea label */
+(function(){var s=lab.textSprite('البحر الأحمر','#7dd3fc',.32);s.position.set(-6.4,TY+0.45,-1.0);scene.add(s);})();
+
+/* ───────────────────── the route ───────────────────── */
+var curve=new THREE.CatmullRomCurve3(STATIONS.map(function(s){return s.pos.clone();}),false,'catmullrom',0.5);
+var tube=new THREE.Mesh(
+  new THREE.TubeGeometry(curve,160,0.035,8,false),
+  new THREE.MeshBasicMaterial({color:0xfcd34d,transparent:true,opacity:.9})
+);
+scene.add(tube);
+/* dashed glow under route */
+var rpts=curve.getPoints(160);
+var rgeo=new THREE.BufferGeometry().setFromPoints(rpts.map(function(p){return new THREE.Vector3(p.x,p.y+0.002,p.z);}));
+scene.add(new THREE.Line(rgeo,new THREE.LineBasicMaterial({color:0xfde68a,transparent:true,opacity:.5})));
+
+/* ───────────────────── waypoint markers + labels ───────────────────── */
+var markers=[];
+STATIONS.forEach(function(st,idx){
+  var grp=new THREE.Group();grp.position.copy(st.pos);
+  var beam=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,1.1,10),
+    new THREE.MeshBasicMaterial({color:st.color,transparent:true,opacity:.35}));
+  beam.position.y=0.55;grp.add(beam);
+  var orb=new THREE.Mesh(new THREE.SphereGeometry(0.12,18,14),
+    new THREE.MeshStandardMaterial({color:st.color,emissive:st.color,emissiveIntensity:1,roughness:.3}));
+  orb.position.y=1.15;grp.add(orb);
+  var glow=new THREE.Sprite(new THREE.SpriteMaterial({
+    map:lab.glowTexture('rgba(255,255,255,.95)','rgba(255,255,255,.25)'),
+    transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
+  glow.scale.setScalar(0.7);orb.add(glow);
+  var lbl=lab.textSprite((idx+1)+'. '+st.name,'#'+st.color.toString(16).padStart(6,'0'),.34);
+  lbl.position.y=1.55;grp.add(lbl);
+  grp.userData={station:st,orb:orb,pickable:true};
+  scene.add(grp);
+  markers.push(grp);
+});
+
+/* ───────────────────── guidance light + riderless caravan ───────────────────── */
+var guide=new THREE.Mesh(new THREE.SphereGeometry(0.1,16,12),
+  new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xfff1b8,emissiveIntensity:1.4}));
+var guideGlow=new THREE.Sprite(new THREE.SpriteMaterial({
+  map:lab.glowTexture('rgba(255,245,200,1)','rgba(255,200,80,.3)'),
+  transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
+guideGlow.scale.setScalar(1.1);guide.add(guideGlow);
+scene.add(guide);
+
+function camel(){
+  var g=new THREE.Group();
+  var mat=new THREE.MeshStandardMaterial({color:0x8a5a32,roughness:1,flatShading:true});
+  var body=new THREE.Mesh(new THREE.SphereGeometry(0.12,10,8),mat);body.scale.set(1.5,0.8,0.8);body.position.y=0.2;g.add(body);
+  [-0.05,0.06].forEach(function(h){var hump=new THREE.Mesh(new THREE.SphereGeometry(0.06,8,6),mat);hump.position.set(h,0.3,0);g.add(hump);});
+  var neck=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.04,0.22,6),mat);neck.position.set(0.16,0.3,0);neck.rotation.z=-0.6;g.add(neck);
+  var head=new THREE.Mesh(new THREE.SphereGeometry(0.05,8,6),mat);head.position.set(0.24,0.4,0);g.add(head);
+  [[-0.08,0.05],[-0.08,-0.05],[0.08,0.05],[0.08,-0.05]].forEach(function(l){
+    var leg=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.018,0.2,6),mat);
+    leg.position.set(l[0],0.1,l[1]);g.add(leg);});
+  g.scale.setScalar(0.6);
+  return g;
+}
+var caravan=[camel(),camel()];caravan.forEach(function(c){scene.add(c);});
+
+/* ───────────────────── info board ───────────────────── */
+var board=(function(){
+  var W=1.7,H=1.05,px=560,py=345;
+  var cv=document.createElement('canvas');cv.width=px;cv.height=py;
+  var c=cv.getContext('2d');
+  var tex=new THREE.CanvasTexture(cv);tex.anisotropy=4;
+  var mesh=new THREE.Mesh(new THREE.PlaneGeometry(W,H),
+    new THREE.MeshBasicMaterial({map:tex,transparent:true}));
+  mesh.position.set(0,2.5,-2.6);scene.add(mesh);
+  function wrap(text,x,y,maxW,lh){
+    var words=text.split(' '),line='',yy=y;
+    for(var i=0;i<words.length;i++){
+      var t=line+words[i]+' ';
+      if(c.measureText(t).width>maxW&&line){c.fillText(line.trim(),x,yy);line=words[i]+' ';yy+=lh;}
+      else line=t;
+    }
+    c.fillText(line.trim(),x,yy);
+  }
+  function set(st,idx){
+    var col='#'+st.color.toString(16).padStart(6,'0');
+    c.clearRect(0,0,px,py);
+    c.fillStyle='rgba(7,11,28,.93)';c.fillRect(0,0,px,py);
+    c.strokeStyle=col;c.lineWidth=6;c.strokeRect(3,3,px-6,py-6);
+    c.textAlign='right';c.textBaseline='top';
+    c.fillStyle=col;c.font='900 42px Tajawal, Arial';
+    c.fillText('📍 '+(idx+1)+'. '+st.name,px-24,22);
+    c.fillStyle='#dbe4f0';c.font='600 27px Tajawal, Arial';
+    wrap(st.desc,px-24,86,px-48,38);
+    tex.needsUpdate=true;
+  }
+  return {mesh:mesh,set:set};
+})();
+
+/* ───────────────────── state & animation ───────────────────── */
+var SEG=STATIONS.length-1;
+var u=0;                       /* 0..1 along whole curve */
+var playing=true;
+var current=0;
+
+function stationU(i){return i/SEG;}
+function setStation(i,animate){
+  current=Math.max(0,Math.min(SEG,i));
+  board.set(STATIONS[current],current);
+  markers.forEach(function(m,idx){m.userData.orb.scale.setScalar(idx===current?1.5:1);});
+  if(!animate){u=stationU(current);}
+}
+setStation(0,false);
+
+function placeAlong(t){
+  var p=curve.getPointAt(Math.max(0,Math.min(1,t)));
+  guide.position.set(p.x,p.y+0.25,p.z);
+  /* caravan trails the light */
+  caravan.forEach(function(c,i){
+    var tt=Math.max(0,t-0.02-i*0.018);
+    var cp=curve.getPointAt(tt);
+    var nx=curve.getPointAt(Math.min(1,tt+0.005));
+    c.position.set(cp.x,TY,cp.z);
+    c.rotation.y=Math.atan2(nx.x-cp.x,nx.z-cp.z)+Math.PI/2;
+  });
+}
+
+lab.onFrame(function(dt){
+  if(playing){
+    u+=dt*0.045;
+    if(u>=1){u=1;playing=false;document.getElementById('btn-play').textContent='▶ تشغيل الرحلة';document.getElementById('btn-play').classList.remove('on');}
+    /* update current station as the light passes */
+    var ci=Math.min(SEG,Math.round(u*SEG));
+    if(ci!==current){setStation(ci,true);if(lab.audio)lab.audio.blip(440+ci*70,.12,'sine',.2);}
+  }
+  placeAlong(u);
+  /* gentle pulse on the active marker */
+  var m=markers[current];if(m)m.userData.orb.material.emissiveIntensity=1.1+Math.sin(performance.now()*0.005)*0.4;
+});
+
+/* ───────────────────── interaction ───────────────────── */
+var raycaster=new THREE.Raycaster();
+function pickAt(rc){
+  var hits=rc.intersectObjects(markers,true);
+  if(!hits.length)return;
+  var o=hits[0].object;
+  while(o&&!(o.userData&&o.userData.station))o=o.parent;
+  if(o){var idx=STATIONS.indexOf(o.userData.station);goTo(idx);}
+}
+function goTo(i){
+  playing=false;
+  document.getElementById('btn-play').textContent='▶ تشغيل الرحلة';
+  document.getElementById('btn-play').classList.remove('on');
+  setStation(i,false);
+  if(lab.audio)lab.audio.ok();
+}
+
+var tmpMat=new THREE.Matrix4();
+lab.onSelect(function(controller){
+  tmpMat.identity().extractRotation(controller.matrixWorld);
+  var o=new THREE.Vector3().setFromMatrixPosition(controller.matrixWorld);
+  var d=new THREE.Vector3(0,0,-1).applyMatrix4(tmpMat).normalize();
+  raycaster.set(o,d);pickAt(raycaster);
+});
+var mouse=new THREE.Vector2();
+lab.renderer.domElement.addEventListener('pointerdown',function(ev){
+  mouse.x=(ev.clientX/window.innerWidth)*2-1;
+  mouse.y=-(ev.clientY/window.innerHeight)*2+1;
+  raycaster.setFromCamera(mouse,lab.camera);pickAt(raycaster);
+});
+
+document.getElementById('btn-play').onclick=function(){
+  if(u>=1)u=0;
+  playing=!playing;
+  this.classList.toggle('on',playing);
+  this.textContent=playing?'⏸ إيقاف الرحلة':'▶ تشغيل الرحلة';
+  if(lab.audio)lab.audio.click();
+};
+document.getElementById('btn-prev').onclick=function(){goTo(current-1);};
+document.getElementById('btn-next').onclick=function(){goTo(current+1);};
+
+setTimeout(function(){var h=document.getElementById('hint');if(h)h.classList.add('gone');},8000);
+})();
+</script>
+</body>
+</html>

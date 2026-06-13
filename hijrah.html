@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>الهجرة النبوية — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<style>
+body{overflow-x:hidden}
+.hj-wrap{max-width:1080px;margin:0 auto;padding:16px 16px 60px;display:flex;flex-direction:column;gap:16px}
+.hj-top{display:flex;gap:16px;flex-wrap:wrap}
+#hj-map{background:#0a1326;border-radius:16px;border:1.5px solid rgba(255,255,255,.1);flex:1;min-width:300px;cursor:pointer;touch-action:none}
+.hj-side{flex:1;min-width:280px;display:flex;flex-direction:column;gap:12px}
+.hj-card{background:rgba(255,255,255,.04);border-radius:14px;border:1px solid rgba(255,255,255,.09);padding:16px 18px}
+.hj-step-name{font-size:1.4rem;font-weight:900;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.hj-step-desc{font-size:.96rem;color:var(--dim);line-height:1.85}
+.hj-nav{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.hj-btn{padding:9px 16px;border-radius:10px;border:1.5px solid rgba(255,255,255,.13);background:rgba(255,255,255,.05);color:var(--text);font-family:inherit;font-size:.9rem;font-weight:700;cursor:pointer;transition:all .15s}
+.hj-btn:hover{border-color:#a78bfa;color:#c4b5fd}
+.hj-btn.play{border-color:#34d399;color:#34d399;background:rgba(52,211,153,.1)}
+.hj-counter{font-size:.85rem;color:var(--dim);font-weight:700}
+.hj-stations{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.hj-chip{padding:6px 12px;border-radius:999px;border:1.5px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:var(--dim);font-size:.82rem;font-weight:700;cursor:pointer;transition:all .15s}
+.hj-chip.active{color:#fff}
+.hj-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.hj-fact{background:rgba(255,255,255,.04);border-radius:10px;border-left:3px solid #a78bfa;padding:10px 12px}
+.hj-fact b{display:block;color:#c4b5fd;font-size:.82rem;margin-bottom:3px}
+.hj-fact span{font-size:.86rem;color:var(--dim)}
+</style>
+</head>
+<body>
+<header class="portal-header">
+  <a href="history.html" class="portal-header-back">← رجوع</a>
+  <a href="hijrah-3d.html" class="portal-header-back" style="border-color:rgba(167,139,250,.45);color:#c4b5fd">🥽 النسخة الغامرة 3D</a>
+  <img src="images/logos/logo.png" alt="EDAMA" class="portal-logo-img"/>
+  <div class="portal-logo-wrap">
+    <div class="portal-logo">EDAMA <span>Virtual Technology</span></div>
+    <div class="portal-tagline">تاريخ — الهجرة النبوية الشريفة</div>
+  </div>
+</header>
+
+<div class="hj-wrap">
+  <div class="hj-top">
+    <canvas id="hj-map" width="560" height="460"></canvas>
+    <div class="hj-side">
+      <div class="hj-card">
+        <div class="hj-step-name" id="hj-name">📍 مكة المكرّمة</div>
+        <div class="hj-step-desc" id="hj-desc"></div>
+      </div>
+      <div class="hj-nav">
+        <button class="hj-btn" id="hj-prev">◀ السابق</button>
+        <button class="hj-btn play" id="hj-play">▶ تشغيل الرحلة</button>
+        <button class="hj-btn" id="hj-next">التالي ▶</button>
+        <span class="hj-counter" id="hj-counter">1 / 5</span>
+      </div>
+      <div class="hj-stations" id="hj-chips"></div>
+    </div>
+  </div>
+  <div class="hj-facts">
+    <div class="hj-fact"><b>العام</b><span>1 هـ / 622 م</span></div>
+    <div class="hj-fact"><b>المسافة التقريبية</b><span>نحو 450 كم بين مكة والمدينة</span></div>
+    <div class="hj-fact"><b>مدة الاختباء في الغار</b><span>ثلاث ليالٍ</span></div>
+    <div class="hj-fact"><b>أول مسجد</b><span>مسجد قُباء</span></div>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+/* map coordinates are laid out stylistically (north = up) — no human figures */
+var STATIONS=[
+  {name:'مكة المكرّمة',  color:'#fbbf24', x:0.62,y:0.84,
+   desc:'في ليلة الهجرة أحاط المشركون بالبيت، فخرج النبي ﷺ من مكة سرّاً مع صاحبه، وانطلقت الرحلة المباركة نحو يثرب.'},
+  {name:'غار ثَوْر',     color:'#93c5fd', x:0.70,y:0.92,
+   desc:'اتّجها جنوباً إلى غار ثور واختبآ فيه ثلاث ليالٍ. نسج العنكبوت خيوطه على الباب وعشّش الحمام عند مدخله، فظنّ المطاردون أن لا أحد بالداخل.'},
+  {name:'الطريق الساحلي', color:'#34d399', x:0.40,y:0.58,
+   desc:'سلك الدليل طريقاً غير مألوف بمحاذاة ساحل البحر الأحمر لتضليل المطاردين، ثم اتّجه شمالاً نحو يثرب.'},
+  {name:'قُباء',         color:'#a78bfa', x:0.26,y:0.24,
+   desc:'وصل إلى قُباء على أطراف المدينة، وأسّس فيها مسجد قُباء، وهو أول مسجد بُني في الإسلام.'},
+  {name:'المدينة المنوّرة',color:'#4ade80', x:0.22,y:0.12,
+   desc:'دخل المدينة فاستقبله أهلها بالفرح والأناشيد، وبُني المسجد النبوي الشريف، وقامت دولة الإسلام الأولى.'}
+];
+var cv=document.getElementById('hj-map'),c=cv.getContext('2d');
+var W=cv.width,H=cv.height;
+var cur=0, playing=false, prog=0, raf=null;
+
+function P(s){return {x:s.x*W,y:s.y*H};}
+
+function draw(){
+  c.clearRect(0,0,W,H);
+  /* background land + sea */
+  c.fillStyle='#0a1326';c.fillRect(0,0,W,H);
+  c.fillStyle='#123a52';c.fillRect(0,0,W*0.22,H);          /* Red Sea strip on the west */
+  c.fillStyle='rgba(194,160,106,.10)';c.fillRect(W*0.22,0,W,H);
+  /* compass */
+  c.fillStyle='rgba(255,255,255,.4)';c.font='bold 14px sans-serif';c.textAlign='center';
+  c.fillText('شمال ↑',W-44,20);
+  /* route line */
+  c.strokeStyle='rgba(252,211,77,.9)';c.lineWidth=3;c.setLineDash([7,5]);
+  c.beginPath();
+  STATIONS.forEach(function(s,i){var p=P(s);if(i===0)c.moveTo(p.x,p.y);else c.lineTo(p.x,p.y);});
+  c.stroke();c.setLineDash([]);
+  /* traveled portion (solid) */
+  if(prog>0){
+    c.strokeStyle='#fcd34d';c.lineWidth=4;c.beginPath();
+    var total=STATIONS.length-1, t=prog*total, seg=Math.floor(t), f=t-seg;
+    c.moveTo(P(STATIONS[0]).x,P(STATIONS[0]).y);
+    for(var i=1;i<=seg;i++)c.lineTo(P(STATIONS[i]).x,P(STATIONS[i]).y);
+    if(seg<total){var a=P(STATIONS[seg]),b=P(STATIONS[seg+1]);c.lineTo(a.x+(b.x-a.x)*f,a.y+(b.y-a.y)*f);}
+    c.stroke();
+  }
+  /* stations */
+  STATIONS.forEach(function(s,i){
+    var p=P(s);
+    if(i===cur){c.beginPath();c.arc(p.x,p.y,16,0,Math.PI*2);c.fillStyle=s.color+'33';c.fill();}
+    c.beginPath();c.arc(p.x,p.y,8,0,Math.PI*2);c.fillStyle=s.color;c.fill();
+    c.strokeStyle='#0a1326';c.lineWidth=2;c.stroke();
+    c.fillStyle='#e2e8f0';c.font='700 13px Tajawal, sans-serif';c.textAlign=p.x>W*0.5?'right':'left';
+    c.fillText((i+1)+'. '+s.name,p.x+(p.x>W*0.5?-14:14),p.y+4);
+  });
+  /* traveling marker */
+  if(prog>0&&prog<1){
+    var total2=STATIONS.length-1,t2=prog*total2,seg2=Math.floor(t2),f2=t2-seg2;
+    var a2=P(STATIONS[Math.min(seg2,total2)]),b2=P(STATIONS[Math.min(seg2+1,total2)]);
+    var mx=a2.x+(b2.x-a2.x)*f2,my=a2.y+(b2.y-a2.y)*f2;
+    var g=c.createRadialGradient(mx,my,0,mx,my,14);
+    g.addColorStop(0,'rgba(255,245,200,.95)');g.addColorStop(1,'rgba(255,200,80,0)');
+    c.beginPath();c.arc(mx,my,14,0,Math.PI*2);c.fillStyle=g;c.fill();
+    c.beginPath();c.arc(mx,my,5,0,Math.PI*2);c.fillStyle='#fff';c.fill();
+  }
+}
+
+function show(i){
+  cur=(i+STATIONS.length)%STATIONS.length;
+  var s=STATIONS[cur];
+  document.getElementById('hj-name').innerHTML='📍 '+s.name;
+  document.getElementById('hj-name').style.color=s.color;
+  document.getElementById('hj-desc').textContent=s.desc;
+  document.getElementById('hj-counter').textContent=(cur+1)+' / '+STATIONS.length;
+  document.querySelectorAll('.hj-chip').forEach(function(ch,idx){
+    ch.classList.toggle('active',idx===cur);
+    ch.style.background=idx===cur?s.color:'';ch.style.borderColor=idx===cur?s.color:'';
+  });
+  if(!playing)prog=cur/(STATIONS.length-1);
+  draw();
+}
+
+function loop(){
+  prog+=0.0016;
+  if(prog>=1){prog=1;playing=false;document.getElementById('hj-play').textContent='▶ تشغيل الرحلة';}
+  var idx=Math.min(STATIONS.length-1,Math.round(prog*(STATIONS.length-1)));
+  if(idx!==cur){cur=idx;
+    var s=STATIONS[cur];
+    document.getElementById('hj-name').innerHTML='📍 '+s.name;document.getElementById('hj-name').style.color=s.color;
+    document.getElementById('hj-desc').textContent=s.desc;
+    document.getElementById('hj-counter').textContent=(cur+1)+' / '+STATIONS.length;
+    document.querySelectorAll('.hj-chip').forEach(function(ch,i2){ch.classList.toggle('active',i2===cur);});
+  }
+  draw();
+  if(playing)raf=requestAnimationFrame(loop);
+}
+
+/* build chips */
+var chips=document.getElementById('hj-chips');
+STATIONS.forEach(function(s,i){
+  var b=document.createElement('button');b.className='hj-chip';b.textContent=(i+1)+'. '+s.name;
+  b.onclick=function(){playing=false;document.getElementById('hj-play').textContent='▶ تشغيل الرحلة';show(i);};
+  chips.appendChild(b);
+});
+
+/* map click → nearest station */
+cv.addEventListener('pointerdown',function(ev){
+  var r=cv.getBoundingClientRect();
+  var x=(ev.clientX-r.left)*cv.width/r.width, y=(ev.clientY-r.top)*cv.height/r.height;
+  var best=0,bd=1e9;
+  STATIONS.forEach(function(s,i){var p=P(s);var d=(p.x-x)*(p.x-x)+(p.y-y)*(p.y-y);if(d<bd){bd=d;best=i;}});
+  if(bd<2500){playing=false;document.getElementById('hj-play').textContent='▶ تشغيل الرحلة';show(best);}
+});
+
+document.getElementById('hj-prev').onclick=function(){playing=false;document.getElementById('hj-play').textContent='▶ تشغيل الرحلة';show(cur-1);};
+document.getElementById('hj-next').onclick=function(){playing=false;document.getElementById('hj-play').textContent='▶ تشغيل الرحلة';show(cur+1);};
+document.getElementById('hj-play').onclick=function(){
+  playing=!playing;
+  this.textContent=playing?'⏸ إيقاف':'▶ تشغيل الرحلة';
+  if(playing){if(prog>=1)prog=0;cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);}
+};
+
+show(0);
+})();
+</script>
+</body>
+</html>
