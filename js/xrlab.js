@@ -230,6 +230,28 @@ function buildPanel(env){
     return mesh;
   }
 
+  /* draggable title bar — grab with the laser to reposition the panel */
+  function handleMesh(text){
+    var mesh=canvasMesh(PW-PADX*2,TITLEH*1.25);
+    var c=mesh.userData.ctx,px=mesh.userData.px,py=mesh.userData.py;
+    function draw(hover){
+      c.clearRect(0,0,px,py);
+      rr(c,3,3,px-6,py-6,14);
+      c.fillStyle=hover?'rgba(96,165,250,.30)':'rgba(28,40,78,.96)';c.fill();
+      c.lineWidth=hover?6:3;c.strokeStyle=hover?'#93c5fd':'rgba(255,255,255,.28)';c.stroke();
+      c.fillStyle=hover?'#dbeafe':'#cbd5e1';
+      c.font='900 '+Math.round(py*.46)+'px Tajawal, Arial';
+      c.textAlign='center';c.textBaseline='middle';
+      c.fillText('⠿  '+text+'  ⠿',px/2,py/2);
+      mesh.userData.tex.needsUpdate=true;
+    }
+    mesh.userData.kind='handle';
+    mesh.userData.redraw=function(hover){draw(hover);};
+    draw(false);
+    targets.push(mesh);
+    return mesh;
+  }
+
   /* gather DOM controls */
   function collect(){
     var sliders=[],buttons=[];
@@ -261,7 +283,7 @@ function buildPanel(env){
   }
 
   /* ── system row: exit / zoom / audio ── */
-  row(titleMesh('🎛️ لوحة التحكم'),TITLEH);
+  row(handleMesh('حرّك اللوحة'),TITLEH*1.25);
 
   var halfBtnW=(PW-PADX*2-GAP)/2;
   /* exit (full width, prominent) */
@@ -410,10 +432,13 @@ function init(opts){
   scene.background=new THREE.Color(0x04061a);
   scene.fog=new THREE.FogExp2(0x04061a,opts.fog!==undefined?opts.fog:.014);
 
-  /* world group — experiment content lives here so it can be zoomed
-     (scaled) without touching controllers / UI / floor */
+  /* world group — experiment content lives here so it can be zoomed,
+     orbited and offset without touching controllers / UI / floor.
+     scene → orbit (spin + zoom about the view centre) → world (content) */
   var world=new THREE.Group();
-  scene.add(world);
+  var orbit=new THREE.Group();
+  orbit.add(world);
+  scene.add(orbit);
 
   var camera=new THREE.PerspectiveCamera(60,window.innerWidth/window.innerHeight,.05,400);
   var cp=opts.cameraPos||[0,2.4,8];
@@ -468,25 +493,30 @@ function init(opts){
      plus a VR spawn offset that pushes the content in front of the
      user (who starts at the world origin) so they face the whole
      shape from a comfortable distance instead of standing inside it. */
-  var zoomState=1;
+  var zoomState=1, worldYaw=0;
   var pivot=new THREE.Vector3(ct[0],ct[1],ct[2]);
   var camVec=new THREE.Vector3(cp[0],cp[1],cp[2]);
-  var vrOffset=new THREE.Vector3(0,0,0);
+  var viewCenter=new THREE.Vector3().copy(pivot);
+  world.position.copy(pivot).multiplyScalar(-1);   /* content pivot → orbit origin */
   function applyTransform(){
-    world.scale.setScalar(zoomState);
-    world.position.copy(pivot).multiplyScalar(1-zoomState).add(vrOffset);
+    orbit.position.copy(viewCenter);
+    orbit.rotation.y=worldYaw;
+    orbit.scale.setScalar(zoomState);
   }
   function zoomBy(f){zoomState=Math.max(0.2,Math.min(4,zoomState*f));applyTransform();}
   function zoomReset(){zoomState=1;applyTransform();}
+  function orbitBy(rad){worldYaw+=rad;applyTransform();}
   function vrSpawn(on){
+    worldYaw=0;
     if(on){
       /* match the author's framing distance (eased for VR's wider FOV),
-         place the look-at target straight ahead of the user */
+         placing the look-at target straight ahead of the user */
       var d=Math.max(2.5,Math.min(6.5,camVec.distanceTo(pivot)*0.72));
-      vrOffset.set(-pivot.x,0,-d-pivot.z);
-    }else vrOffset.set(0,0,0);
+      viewCenter.set(0,pivot.y,-d);
+    }else viewCenter.copy(pivot);
     applyTransform();
   }
+  applyTransform();
 
   /* XR controllers with laser pointers */
   var controllers=[];
@@ -505,9 +535,11 @@ function init(opts){
   var PANEL_SCALE=2.0, placePanelCountdown=0;
   var raycaster=new THREE.Raycaster();
   var dragSlider=null,dragController=null;
+  var panelDragCtrl=null, panelGrabOffset=new THREE.Vector3();
   var hoverMesh=null;
   var tmpMat=new THREE.Matrix4();
   var _hp=new THREE.Vector3(),_q=new THREE.Quaternion(),_fwd=new THREE.Vector3();
+  var _right=new THREE.Vector3(),_up=new THREE.Vector3(0,1,0),_cpw=new THREE.Vector3();
 
   function controllerRay(controller){
     tmpMat.identity().extractRotation(controller.matrixWorld);
@@ -554,7 +586,11 @@ function init(opts){
       if(hit){
         var m=hit.object;
         audio.resume();
-        if(m.userData.kind==='slider'){
+        if(m.userData.kind==='handle'){
+          panelDragCtrl=ctrl;
+          _cpw.setFromMatrixPosition(ctrl.matrixWorld);
+          panelGrabOffset.copy(panel.group.position).sub(_cpw);
+        }else if(m.userData.kind==='slider'){
           dragSlider=m;dragController=ctrl;
           var lp=m.worldToLocal(hit.point.clone());
           m.userData.setFromLocalX(lp.x);
@@ -568,6 +604,7 @@ function init(opts){
     });
     ctrl.addEventListener('selectend',function(){
       if(dragController===ctrl){dragSlider=null;dragController=null;}
+      if(panelDragCtrl===ctrl){panelDragCtrl=null;}
     });
   });
 
@@ -587,13 +624,20 @@ function init(opts){
           _fwd.set(0,0,-1).applyQuaternion(_q);_fwd.y=0;
           if(_fwd.lengthSq()<1e-5)_fwd.set(0,0,-1);
           _fwd.normalize();
-          panel.group.position.copy(_hp).addScaledVector(_fwd,1.25);
-          panel.group.position.y=_hp.y-0.32;
-          panel.group.rotation.x=0.12;
+          _right.crossVectors(_fwd,_up).normalize();   /* user's right-hand side */
+          /* off to the right so it doesn't cover the shape; reachable by laser */
+          panel.group.position.copy(_hp).addScaledVector(_fwd,0.85).addScaledVector(_right,0.95);
+          panel.group.position.y=_hp.y-0.22;
+          panel.group.rotation.x=0.10;
           panel.group.visible=true;
         }
       }
       if(panel.group.visible){
+        /* move the whole panel while its handle is grabbed */
+        if(panelDragCtrl){
+          _cpw.setFromMatrixPosition(panelDragCtrl.matrixWorld);
+          panel.group.position.copy(_cpw).add(panelGrabOffset);
+        }
         /* always face the user (yaw only) */
         panel.group.rotation.y=Math.atan2(_hp.x-panel.group.position.x,_hp.z-panel.group.position.z);
         /* slider drag */
@@ -610,13 +654,14 @@ function init(opts){
         var h=pickUI(controllers[1])||pickUI(controllers[0]);
         var nh=h?h.object:null;
         if(nh!==hoverMesh){hoverMesh=nh;panel.redrawAll(hoverMesh);}
-        /* thumbstick zoom (axes[3]) */
+        /* thumbstick: X (axes[2]) orbits the shape, Y (axes[3]) zooms */
         var sess=renderer.xr.getSession();
         if(sess&&sess.inputSources){
           for(var s=0;s<sess.inputSources.length;s++){
             var gp=sess.inputSources[s].gamepad;
             if(gp&&gp.axes&&gp.axes.length>=4){
-              var ay=gp.axes[3];
+              var ax=gp.axes[2],ay=gp.axes[3];
+              if(Math.abs(ax)>0.25)orbitBy(-ax*dt*1.2);
               if(Math.abs(ay)>0.25)zoomBy(1-ay*dt*1.4);
             }
           }
