@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<title>شجرة العوامل الحية — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<link rel="stylesheet" href="css/xrlab.css"/>
+<style>
+.num-input{
+  width:100%;padding:10px;border-radius:10px;
+  background:rgba(0,0,0,.4);border:1.5px solid rgba(255,255,255,.15);
+  color:#e2e8f0;font-family:inherit;font-size:1.15rem;font-weight:900;text-align:center;
+  outline:none;font-variant-numeric:tabular-nums;
+}
+.num-input:focus{border-color:#60a5fa}
+.factor-result{
+  margin-top:10px;padding:10px;border-radius:10px;background:rgba(0,0,0,.3);
+  text-align:center;font-size:1.05rem;font-weight:900;color:#fbbf24;
+  direction:ltr;min-height:1.4em;
+}
+</style>
+</head>
+<body>
+
+<div id="scene"></div>
+
+<header class="hud-header">
+  <a href="math.html" class="hud-back">← رجوع</a>
+  <div class="hud-title">🌳 شجرة العوامل <span>الحية</span></div>
+  <a href="factor-tree.html" class="hud-2d">📊 الوضع المبسّط 2D</a>
+</header>
+
+<div class="hint glass" id="hint">أدخل عدداً وشاهد شجرته تنمو — الكرات الذهبية أعداد أولية 🏆</div>
+
+<div class="side-panel">
+  <div class="glass sp-section">
+    <div class="sp-title">العدد (2 — 9999)</div>
+    <input class="num-input" id="num" type="number" min="2" max="9999" value="360"/>
+    <div class="factor-result" id="result"></div>
+    <div style="height:8px"></div>
+    <button class="sp-btn secondary" id="btn-random">🎲 عدد عشوائي</button>
+  </div>
+
+  <div class="glass sp-section">
+    <div class="sp-title">الدليل</div>
+    <div style="font-size:.74rem;color:#94a3b8;line-height:2">
+      <span style="color:#fbbf24">●</span> عدد أولي — نهاية الفرع<br/>
+      <span style="color:#60a5fa">●</span> عدد مركّب — ينقسم لعاملين<br/>
+      الشجرة تنمو مستوىً تلو مستوى
+    </div>
+  </div>
+</div>
+
+<script src="js/vendor/three.min.js"></script>
+<script src="js/vendor/OrbitControls.js"></script>
+<script src="js/vendor/VRButton.js"></script>
+<script src="js/xrlab.js"></script>
+<script>
+(function(){
+'use strict';
+
+var lab=XRLab.init({cameraPos:[0,3.6,11],target:[0,3.4,0],maxDistance:40});
+var scene=lab.scene;
+
+var tree=new THREE.Group();
+scene.add(tree);
+
+var TOP_Y=6.4,STEP_Y=1.05;
+var nodes=[]; /* {mesh, lbl, born} for grow animation */
+
+function isPrime(n){
+  if(n<2)return false;
+  for(var i=2;i*i<=n;i++)if(n%i===0)return false;
+  return true;
+}
+function smallestFactor(n){
+  for(var i=2;i*i<=n;i++)if(n%i===0)return i;
+  return n;
+}
+
+/* build logical tree, collect leaves for layout */
+function buildLogical(n,depth){
+  if(isPrime(n))return{n:n,prime:true,depth:depth,leaves:1};
+  var p=smallestFactor(n);
+  var l=buildLogical(p,depth+1);
+  var r=buildLogical(n/p,depth+1);
+  return{n:n,prime:false,depth:depth,left:l,right:r,leaves:l.leaves+r.leaves};
+}
+
+var glowGold=lab.glowTexture('rgba(255,230,150,.95)','rgba(251,191,36,.3)');
+var glowBlue=lab.glowTexture('rgba(170,200,255,.9)','rgba(96,165,250,.28)');
+
+function makeNode(n,prime,x,y,depth){
+  var col=prime?0xfbbf24:0x60a5fa;
+  var r=prime?.34:.42;
+  var m=new THREE.Mesh(
+    new THREE.SphereGeometry(r,20,16),
+    new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:prime?.75:.4,roughness:.3})
+  );
+  m.position.set(x,y,0);
+  m.scale.setScalar(.001);
+  tree.add(m);
+  var g=new THREE.Sprite(new THREE.SpriteMaterial({
+    map:prime?glowGold:glowBlue,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending
+  }));
+  g.scale.setScalar(prime?2.6:3);
+  m.add(g);
+  var lbl=lab.textSprite(String(n),prime?'#fde68a':'#dbeafe',.52);
+  lbl.position.set(x,y,.55);
+  lbl.material.opacity=0;
+  tree.add(lbl);
+  nodes.push({mesh:m,lbl:lbl,born:depth*.55,prime:prime});
+  return m;
+}
+
+function makeBranch(x1,y1,x2,y2,depth){
+  var pts=[new THREE.Vector3(x1,y1-.3,0),new THREE.Vector3(x2,y2+.45,0)];
+  var curve=new THREE.CatmullRomCurve3(pts);
+  var m=new THREE.Mesh(
+    new THREE.TubeGeometry(curve,8,.035,8,false),
+    new THREE.MeshStandardMaterial({color:0x4a7a4a,emissive:0x1a3a1a,emissiveIntensity:.5,transparent:true,opacity:0})
+  );
+  tree.add(m);
+  nodes.push({mesh:null,branch:m,born:depth*.55+.3});
+}
+
+/* layout: leaves get sequential x slots; parents centered over children */
+function layout(node,slot){
+  if(node.prime){
+    node.x=slot.x;
+    slot.x+=1.15;
+  }else{
+    layout(node.left,slot);
+    layout(node.right,slot);
+    node.x=(node.left.x+node.right.x)/2;
+  }
+}
+
+function render(node){
+  var y=TOP_Y-node.depth*STEP_Y;
+  makeNode(node.n,node.prime,node.x,y,node.depth);
+  if(!node.prime){
+    var cy=TOP_Y-(node.depth+1)*STEP_Y;
+    makeBranch(node.x,y,node.left.x,cy,node.depth);
+    makeBranch(node.x,y,node.right.x,cy,node.depth);
+    render(node.left);
+    render(node.right);
+  }
+}
+
+function primeFactorization(n){
+  var f={},p;
+  while(n>1){
+    p=smallestFactor(n);
+    f[p]=(f[p]||0)+1;
+    n/=p;
+  }
+  var sup='⁰¹²³⁴⁵⁶⁷⁸⁹';
+  return Object.keys(f).map(function(k){
+    var e=f[k];
+    if(e===1)return k;
+    return k+String(e).split('').map(function(d){return sup[+d];}).join('');
+  }).join(' × ');
+}
+
+var animT=0;
+function build(){
+  var n=Math.floor(+document.getElementById('num').value);
+  if(!(n>=2&&n<=9999))return;
+  while(tree.children.length)tree.remove(tree.children[0]);
+  nodes=[];animT=0;
+  var root=buildLogical(n,0);
+  var slot={x:0};
+  layout(root,slot);
+  /* center the tree */
+  var shift=(slot.x-1.15)/2;
+  (function recenter(nd){nd.x-=shift;if(!nd.prime){recenter(nd.left);recenter(nd.right);}})(root);
+  render(root);
+  document.getElementById('result').textContent=n+' = '+primeFactorization(n);
+}
+
+document.getElementById('num').addEventListener('input',build);
+function randomNum(){
+  /* prefer numbers with rich trees */
+  var candidates=[360,540,720,840,900,1024,1260,144,216,480,672,2310,3600,496,1728];
+  var n=Math.random()<.5
+    ? candidates[Math.floor(Math.random()*candidates.length)]
+    : 10+Math.floor(Math.random()*990);
+  document.getElementById('num').value=n;
+  build();
+}
+document.getElementById('btn-random').onclick=randomNum;
+lab.onSelect(randomNum);
+
+lab.onFrame(function(dt,t){
+  animT+=dt;
+  for(var i=0;i<nodes.length;i++){
+    var nd=nodes[i];
+    var k=Math.max(0,Math.min(1,(animT-nd.born)/.45));
+    /* ease-out pop */
+    var e=1-(1-k)*(1-k);
+    if(nd.mesh){
+      nd.mesh.scale.setScalar(Math.max(.001,e));
+      nd.lbl.material.opacity=e;
+      if(nd.prime&&k>=1)nd.mesh.material.emissiveIntensity=.65+Math.sin(t*3+i)*.2;
+    }
+    if(nd.branch)nd.branch.material.opacity=e*.9;
+  }
+});
+
+build();
+setTimeout(function(){document.getElementById('hint').classList.add('gone');},5500);
+})();
+</script>
+</body>
+</html>

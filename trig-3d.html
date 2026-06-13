@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<title>دائرة الوحدة الغامرة — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<link rel="stylesheet" href="css/xrlab.css"/>
+</head>
+<body>
+
+<div id="scene"></div>
+
+<header class="hud-header">
+  <a href="math.html" class="hud-back">← رجوع</a>
+  <div class="hud-title">⭕ دائرة الوحدة <span>الغامرة</span></div>
+  <a href="trigonometry.html" class="hud-2d">📊 الوضع المبسّط 2D</a>
+</header>
+
+<div class="hint glass" id="hint">🖱️ اسحب للتدوير حول المشهد — شاهد الموجات تتدفق في العمق</div>
+
+<div class="side-panel">
+  <div class="glass sp-section">
+    <div class="sp-title">الزاوية θ</div>
+    <div class="sp-row">
+      <span class="sp-name">θ</span>
+      <input class="sp-slider" type="range" id="angle" min="0" max="360" step="1" value="35"/>
+      <span class="sp-val" id="angle-v">35°</span>
+    </div>
+    <div class="sp-row">
+      <span class="sp-name">السرعة</span>
+      <input class="sp-slider" type="range" id="speed" min="0" max="3" step="0.1" value="0.8"/>
+      <span class="sp-val" id="speed-v">0.8</span>
+    </div>
+  </div>
+
+  <div class="glass sp-section">
+    <div class="sp-title">القيم الحية</div>
+    <div class="sp-stats">
+      <div class="sp-stat"><div class="sp-stat-l" style="color:#34d399">sin θ</div><div class="sp-stat-v" id="sin-v">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l" style="color:#60a5fa">cos θ</div><div class="sp-stat-v" id="cos-v">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l" style="color:#f472b6">tan θ</div><div class="sp-stat-v" id="tan-v">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l">θ بالراديان</div><div class="sp-stat-v" id="rad-v">—</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="ctl-bar glass">
+  <button class="ctl-btn on" id="btn-auto">▶ دوران تلقائي</button>
+  <button class="ctl-btn on" id="btn-waves">〰️ الموجات</button>
+  <button class="ctl-btn on" id="btn-tan">📐 خط الظل tan</button>
+</div>
+
+<script src="js/vendor/three.min.js"></script>
+<script src="js/vendor/OrbitControls.js"></script>
+<script src="js/vendor/VRButton.js"></script>
+<script src="js/xrlab.js"></script>
+<script>
+(function(){
+'use strict';
+
+var lab=XRLab.init({cameraPos:[4.5,3.2,8],target:[0,2.2,0],maxDistance:40});
+var scene=lab.scene;
+
+var R=2,CY=2.2; /* circle radius and center height */
+var center=new THREE.Vector3(0,CY,0);
+
+/* ── pedestal ── */
+var ped=new THREE.Mesh(
+  new THREE.CylinderGeometry(.5,.7,.9,24),
+  new THREE.MeshStandardMaterial({color:0x101a3a,roughness:.4,metalness:.6})
+);
+ped.position.y=.45;
+scene.add(ped);
+
+/* ── unit circle (vertical, facing +Z) ── */
+var circleGrp=new THREE.Group();
+circleGrp.position.copy(center);
+scene.add(circleGrp);
+
+var ringGeo=new THREE.TorusGeometry(R,.025,10,140);
+var ring=new THREE.Mesh(ringGeo,new THREE.MeshBasicMaterial({color:0xa78bfa}));
+circleGrp.add(ring);
+
+/* axes through circle */
+function axisLine(p1,p2,color,opacity){
+  var g=new THREE.BufferGeometry().setFromPoints([p1,p2]);
+  return new THREE.Line(g,new THREE.LineBasicMaterial({color:color,transparent:true,opacity:opacity||.45}));
+}
+circleGrp.add(axisLine(new THREE.Vector3(-R-1,0,0),new THREE.Vector3(R+1,0,0),0xffffff,.3));
+circleGrp.add(axisLine(new THREE.Vector3(0,-R-.6,0),new THREE.Vector3(0,R+.6,0),0xffffff,.3));
+
+/* radius line + moving point */
+var radiusGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3(R,0,0)]);
+var radiusLine=new THREE.Line(radiusGeo,new THREE.LineBasicMaterial({color:0xffffff}));
+circleGrp.add(radiusLine);
+
+var dot=new THREE.Mesh(
+  new THREE.SphereGeometry(.11,18,14),
+  new THREE.MeshStandardMaterial({color:0xfbbf24,emissive:0x7a5a00,emissiveIntensity:1})
+);
+circleGrp.add(dot);
+var dotGlow=new THREE.Sprite(new THREE.SpriteMaterial({
+  map:lab.glowTexture('rgba(255,240,180,.95)','rgba(251,191,36,.3)'),
+  transparent:true,depthWrite:false,blending:THREE.AdditiveBlending
+}));
+dotGlow.scale.setScalar(1);
+dot.add(dotGlow);
+
+/* sin (vertical green) and cos (horizontal blue) projection lines */
+var sinGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]);
+var sinLine=new THREE.Line(sinGeo,new THREE.LineBasicMaterial({color:0x34d399,linewidth:2}));
+circleGrp.add(sinLine);
+var cosGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]);
+var cosLine=new THREE.Line(cosGeo,new THREE.LineBasicMaterial({color:0x60a5fa,linewidth:2}));
+circleGrp.add(cosLine);
+
+/* tan line: vertical tangent at x=R */
+var tanGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]);
+var tanLine=new THREE.Line(tanGeo,new THREE.LineBasicMaterial({color:0xf472b6}));
+circleGrp.add(tanLine);
+var tanRay=new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),
+  new THREE.LineBasicMaterial({color:0xf472b6,transparent:true,opacity:.3})
+);
+circleGrp.add(tanRay);
+
+/* labels */
+var lblSin=lab.textSprite('sin θ','#34d399',.4);
+var lblCos=lab.textSprite('cos θ','#60a5fa',.4);
+var lblTan=lab.textSprite('tan θ','#f472b6',.4);
+var lblTheta=lab.textSprite('θ','#fbbf24',.45);
+circleGrp.add(lblSin);circleGrp.add(lblCos);circleGrp.add(lblTan);circleGrp.add(lblTheta);
+
+/* ── waves flowing into depth (−Z) ── */
+var HIST=260,SPACING=.07;
+var sinHist=[],cosHist=[];
+function makeWave(color){
+  var pos=new Float32Array(HIST*3);
+  var g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  g.setDrawRange(0,0);
+  return new THREE.Line(g,new THREE.LineBasicMaterial({color:color,transparent:true,opacity:.95}));
+}
+var sinWave=makeWave(0x34d399);
+var cosWave=makeWave(0x60a5fa);
+scene.add(sinWave);scene.add(cosWave);
+
+/* axis rails for the waves */
+var railSin=axisLine(new THREE.Vector3(0,CY,0),new THREE.Vector3(0,CY,-HIST*SPACING),0x34d399,.18);
+var railCos=axisLine(new THREE.Vector3(0,.45,0),new THREE.Vector3(0,.45,-HIST*SPACING),0x60a5fa,.18);
+scene.add(railSin);scene.add(railCos);
+
+function pushWave(line,hist,val){
+  hist.unshift(val);
+  if(hist.length>HIST)hist.pop();
+  var pos=line.geometry.attributes.position.array;
+  for(var i=0;i<hist.length;i++){
+    pos[i*3]=line===cosWave?hist[i]*R:0;
+    pos[i*3+1]=line===cosWave?.45:CY+hist[i]*R;
+    pos[i*3+2]=-i*SPACING;
+  }
+  line.geometry.attributes.position.needsUpdate=true;
+  line.geometry.setDrawRange(0,hist.length);
+}
+
+/* ── state ── */
+var theta=35*Math.PI/180;
+var auto=true,showWaves=true,showTan=true,speed=.8;
+
+function fmt(n){
+  if(!isFinite(n))return'∞';
+  return (Math.round(n*100)/100).toFixed(2);
+}
+
+function update(dt){
+  if(auto){
+    theta+=speed*dt;
+    if(theta>Math.PI*2)theta-=Math.PI*2;
+    document.getElementById('angle').value=Math.round(theta*180/Math.PI);
+  }
+  var deg=Math.round(theta*180/Math.PI);
+  document.getElementById('angle-v').textContent=deg+'°';
+
+  var s=Math.sin(theta),c=Math.cos(theta),tn=Math.tan(theta);
+  var px=c*R,py=s*R;
+
+  dot.position.set(px,py,0);
+  radiusLine.geometry.setFromPoints([new THREE.Vector3(0,0,0),new THREE.Vector3(px,py,0)]);
+
+  sinLine.geometry.setFromPoints([new THREE.Vector3(px,0,0),new THREE.Vector3(px,py,0)]);
+  cosLine.geometry.setFromPoints([new THREE.Vector3(0,py,0),new THREE.Vector3(px,py,0)]);
+
+  /* tan segment on the x=R tangent line */
+  var tanVisible=showTan&&Math.abs(tn)<8;
+  tanLine.visible=tanVisible;tanRay.visible=tanVisible;lblTan.visible=tanVisible;
+  if(tanVisible){
+    tanLine.geometry.setFromPoints([new THREE.Vector3(R,0,0),new THREE.Vector3(R,tn*R,0)]);
+    tanRay.geometry.setFromPoints([new THREE.Vector3(0,0,0),new THREE.Vector3(R,tn*R,0)]);
+    lblTan.position.set(R+.7,tn*R*.5,0);
+  }
+
+  lblSin.position.set(px+(px>=0?.7:-.7),py*.5,0);
+  lblCos.position.set(px*.5,py+(py>=0?.45:-.45),0);
+  lblTheta.position.set(Math.cos(theta/2)*.85,Math.sin(theta/2)*.85,0);
+
+  document.getElementById('sin-v').textContent=fmt(s);
+  document.getElementById('cos-v').textContent=fmt(c);
+  document.getElementById('tan-v').textContent=Math.abs(tn)>50?'∞':fmt(tn);
+  document.getElementById('rad-v').textContent=fmt(theta);
+
+  if(showWaves&&auto){
+    pushWave(sinWave,sinHist,s);
+    pushWave(cosWave,cosHist,c);
+  }
+  sinWave.visible=cosWave.visible=railSin.visible=railCos.visible=showWaves;
+}
+
+lab.onFrame(function(dt){update(dt);});
+
+/* ── UI ── */
+document.getElementById('angle').addEventListener('input',function(){
+  theta=+this.value*Math.PI/180;
+});
+document.getElementById('speed').addEventListener('input',function(){
+  speed=+this.value;
+  document.getElementById('speed-v').textContent=speed.toFixed(1);
+});
+document.getElementById('btn-auto').onclick=function(){
+  auto=!auto;this.classList.toggle('on',auto);
+  this.textContent=auto?'▶ دوران تلقائي':'⏸ متوقف';
+};
+document.getElementById('btn-waves').onclick=function(){
+  showWaves=!showWaves;this.classList.toggle('on',showWaves);
+};
+document.getElementById('btn-tan').onclick=function(){
+  showTan=!showTan;this.classList.toggle('on',showTan);
+};
+
+/* VR trigger toggles auto-rotation */
+lab.onSelect(function(){
+  auto=!auto;
+  var b=document.getElementById('btn-auto');
+  b.classList.toggle('on',auto);
+  b.textContent=auto?'▶ دوران تلقائي':'⏸ متوقف';
+});
+
+setTimeout(function(){document.getElementById('hint').classList.add('gone');},5500);
+})();
+</script>
+</body>
+</html>

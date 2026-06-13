@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<title>المعادلة التربيعية الغامرة — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<link rel="stylesheet" href="css/xrlab.css"/>
+</head>
+<body>
+
+<div id="scene"></div>
+
+<header class="hud-header">
+  <a href="math.html" class="hud-back">← رجوع</a>
+  <div class="hud-title">∪ المعادلة التربيعية <span>الغامرة</span></div>
+  <a href="quadratic.html" class="hud-2d">📊 الوضع المبسّط 2D</a>
+</header>
+
+<div class="hint glass" id="hint">🖱️ حرّك الشرائح وشاهد القطع المكافئ يتشكل كأنبوب ضوئي أمامك</div>
+
+<div class="side-panel">
+  <div class="glass sp-section">
+    <div class="sp-title">المعاملات ax² + bx + c</div>
+    <div class="sp-row">
+      <span class="sp-name" style="color:#f472b6">a</span>
+      <input class="sp-slider" type="range" id="a" min="-3" max="3" step="0.5" value="1"/>
+      <span class="sp-val" id="av" style="color:#f472b6">1</span>
+    </div>
+    <div class="sp-row">
+      <span class="sp-name" style="color:#60a5fa">b</span>
+      <input class="sp-slider" type="range" id="b" min="-8" max="8" step="1" value="-2"/>
+      <span class="sp-val" id="bv" style="color:#60a5fa">-2</span>
+    </div>
+    <div class="sp-row">
+      <span class="sp-name" style="color:#34d399">c</span>
+      <input class="sp-slider" type="range" id="c" min="-9" max="9" step="1" value="-3"/>
+      <span class="sp-val" id="cv" style="color:#34d399">-3</span>
+    </div>
+  </div>
+
+  <div class="glass sp-section">
+    <div class="sp-title">التحليل</div>
+    <div class="sp-stats">
+      <div class="sp-stat"><div class="sp-stat-l">المميز Δ</div><div class="sp-stat-v" id="disc-v">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l">الرأس</div><div class="sp-stat-v" id="vertex-v" style="font-size:.74rem">—</div></div>
+      <div class="sp-stat" style="grid-column:1/-1"><div class="sp-stat-l">الجذور</div><div class="sp-stat-v" id="roots-v" style="font-size:.82rem">—</div></div>
+    </div>
+    <div id="disc-msg" style="margin-top:9px;font-size:.76rem;font-weight:700;text-align:center"></div>
+  </div>
+</div>
+
+<script src="js/vendor/three.min.js"></script>
+<script src="js/vendor/OrbitControls.js"></script>
+<script src="js/vendor/VRButton.js"></script>
+<script src="js/xrlab.js"></script>
+<script>
+(function(){
+'use strict';
+
+var lab=XRLab.init({cameraPos:[3.5,3.4,10.5],target:[0,2.6,0],maxDistance:45});
+var scene=lab.scene;
+
+/* ── math wall: vertical grid plane the curve lives on ── */
+var WALL_W=12,WALL_H=8,BASE_Y=2.8; /* world y of math origin */
+var XS=.75,YS=.42;                  /* world units per math unit */
+
+var wallGrp=new THREE.Group();
+scene.add(wallGrp);
+
+(function(){
+  var mat=new THREE.LineBasicMaterial({color:0x2a3c78,transparent:true,opacity:.45});
+  var pts=[];
+  for(var gx=-8;gx<=8;gx++)
+    pts.push(new THREE.Vector3(gx*XS,BASE_Y-WALL_H/2,0),new THREE.Vector3(gx*XS,BASE_Y+WALL_H/2,0));
+  for(var gy=-9;gy<=9;gy++)
+    pts.push(new THREE.Vector3(-WALL_W/2,BASE_Y+gy*YS,0),new THREE.Vector3(WALL_W/2,BASE_Y+gy*YS,0));
+  var g=new THREE.BufferGeometry().setFromPoints(pts);
+  wallGrp.add(new THREE.LineSegments(g,mat));
+  /* main axes brighter */
+  var ax=new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-WALL_W/2,BASE_Y,0),new THREE.Vector3(WALL_W/2,BASE_Y,0)
+  ]);
+  wallGrp.add(new THREE.Line(ax,new THREE.LineBasicMaterial({color:0x93a8e8,transparent:true,opacity:.85})));
+  var ay=new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0,BASE_Y-WALL_H/2,0),new THREE.Vector3(0,BASE_Y+WALL_H/2,0)
+  ]);
+  wallGrp.add(new THREE.Line(ay,new THREE.LineBasicMaterial({color:0x93a8e8,transparent:true,opacity:.85})));
+})();
+
+var lblX=lab.textSprite('x','#60a5fa',.45);lblX.position.set(WALL_W/2+.6,BASE_Y,0);scene.add(lblX);
+var lblY=lab.textSprite('y','#34d399',.45);lblY.position.set(0,BASE_Y+WALL_H/2+.5,0);scene.add(lblY);
+
+/* ── curve tube + markers ── */
+var curveMesh=null;
+var glowTex=lab.glowTexture('rgba(255,255,255,.9)','rgba(120,160,255,.3)');
+function orb(color){
+  var m=new THREE.Mesh(
+    new THREE.SphereGeometry(.16,18,14),
+    new THREE.MeshStandardMaterial({color:color,emissive:color,emissiveIntensity:.8})
+  );
+  var s=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,color:color}));
+  s.scale.setScalar(1.3);
+  m.add(s);
+  return m;
+}
+var root1=orb(0x34d399),root2=orb(0x60a5fa),vertexOrb=orb(0xfbbf24);
+scene.add(root1);scene.add(root2);scene.add(vertexOrb);
+
+var lblV=lab.textSprite('','#fbbf24',.4);scene.add(lblV);
+var lblR1=lab.textSprite('','#34d399',.4);scene.add(lblR1);
+var lblR2=lab.textSprite('','#60a5fa',.4);scene.add(lblR2);
+var lblEq=lab.textSprite('','#e2e8f0',.55);
+lblEq.position.set(0,BASE_Y+WALL_H/2+1.4,0);
+scene.add(lblEq);
+
+function fmt(n){
+  if(Math.abs(n)<.0001)return'0';
+  return n%1===0?String(n):n.toFixed(2);
+}
+
+function buildEq(a,b,c){
+  var s='';
+  s+=(a===1?'':a===-1?'-':fmt(a))+'x²';
+  if(b>0)s+=' + '+(b===1?'':fmt(b))+'x';else if(b<0)s+=' - '+(b===-1?'':fmt(Math.abs(b)))+'x';
+  if(c>0)s+=' + '+fmt(c);else if(c<0)s+=' - '+fmt(Math.abs(c));
+  return s+' = 0';
+}
+
+function update(){
+  var a=+document.getElementById('a').value||.001;
+  var b=+document.getElementById('b').value;
+  var c=+document.getElementById('c').value;
+  document.getElementById('av').textContent=fmt(a);
+  document.getElementById('bv').textContent=fmt(b);
+  document.getElementById('cv').textContent=fmt(c);
+
+  var disc=b*b-4*a*c;
+  var vx=-b/(2*a),vy=a*vx*vx+b*vx+c;
+
+  var col,msg;
+  if(disc>.001){col='#34d399';msg='Δ > 0 → جذران حقيقيان مختلفان';}
+  else if(disc>-.001){col='#fbbf24';msg='Δ = 0 → جذر حقيقي مضاعف';}
+  else{col='#ef4444';msg='Δ < 0 → لا جذور حقيقية';}
+  var colHex=col==='#34d399'?0x34d399:col==='#fbbf24'?0xfbbf24:0xef4444;
+
+  document.getElementById('disc-v').textContent=fmt(disc);
+  document.getElementById('disc-v').style.color=col;
+  document.getElementById('disc-msg').textContent=msg;
+  document.getElementById('disc-msg').style.color=col;
+  document.getElementById('vertex-v').textContent='('+fmt(vx)+', '+fmt(vy)+')';
+
+  /* curve tube */
+  if(curveMesh){scene.remove(curveMesh);curveMesh.geometry.dispose();}
+  var pts=[];
+  for(var x=-8;x<=8;x+=.1){
+    var y=a*x*x+b*x+c;
+    if(y<-10||y>10)continue;
+    pts.push(new THREE.Vector3(x*XS,BASE_Y+y*YS,0));
+  }
+  if(pts.length>3){
+    var curve=new THREE.CatmullRomCurve3(pts);
+    curveMesh=new THREE.Mesh(
+      new THREE.TubeGeometry(curve,120,.06,10,false),
+      new THREE.MeshStandardMaterial({color:colHex,emissive:colHex,emissiveIntensity:.7,roughness:.3})
+    );
+    scene.add(curveMesh);
+  }
+
+  /* vertex marker */
+  var vVisible=vy>=-10&&vy<=10;
+  vertexOrb.visible=lblV.visible=vVisible;
+  if(vVisible){
+    vertexOrb.position.set(vx*XS,BASE_Y+vy*YS,0);
+    lblV.position.set(vx*XS,BASE_Y+vy*YS-.65,0);
+    lblV.setText('الرأس ('+fmt(vx)+', '+fmt(vy)+')');
+  }
+
+  /* roots */
+  if(disc>=0){
+    var x1=(-b+Math.sqrt(disc))/(2*a),x2=(-b-Math.sqrt(disc))/(2*a);
+    var same=Math.abs(x1-x2)<.001;
+    root1.visible=lblR1.visible=true;
+    root1.position.set(x1*XS,BASE_Y,0);
+    lblR1.position.set(x1*XS,BASE_Y+.62,0);
+    lblR1.setText('x₁ = '+fmt(x1));
+    root2.visible=lblR2.visible=!same;
+    if(!same){
+      root2.position.set(x2*XS,BASE_Y,0);
+      lblR2.position.set(x2*XS,BASE_Y-.62,0);
+      lblR2.setText('x₂ = '+fmt(x2));
+    }
+    document.getElementById('roots-v').textContent=same?('x = '+fmt(x1)):('x₁='+fmt(x1)+'  x₂='+fmt(x2));
+  }else{
+    root1.visible=root2.visible=lblR1.visible=lblR2.visible=false;
+    var re=fmt(-b/(2*a)),im=fmt(Math.sqrt(-disc)/(2*Math.abs(a)));
+    document.getElementById('roots-v').textContent=re+' ± '+im+'i';
+  }
+
+  lblEq.setText(buildEq(a,b,c));
+}
+
+['a','b','c'].forEach(function(id){
+  document.getElementById(id).addEventListener('input',update);
+});
+
+/* pulse the orbs */
+lab.onFrame(function(dt,t){
+  var s=1+Math.sin(t*3)*.12;
+  root1.scale.setScalar(s);root2.scale.setScalar(s);
+  vertexOrb.scale.setScalar(1+Math.sin(t*3+1.5)*.12);
+});
+
+/* VR trigger: randomize coefficients for quick exploration */
+lab.onSelect(function(){
+  document.getElementById('a').value=(Math.round(Math.random()*8)-4)/2||1;
+  document.getElementById('b').value=Math.round(Math.random()*16)-8;
+  document.getElementById('c').value=Math.round(Math.random()*18)-9;
+  update();
+});
+
+update();
+setTimeout(function(){document.getElementById('hint').classList.add('gone');},5500);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<title>البوابة الغامرة — EDAMA Virtual Technology</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<link rel="stylesheet" href="css/xrlab.css"/>
+<style>
+.hud-title-big{font-size:1.05rem}
+.gate-tip{
+  position:fixed;bottom:70px;right:50%;transform:translateX(50%);z-index:25;
+  padding:10px 22px;font-size:.92rem;color:#e2e8f0;font-weight:900;
+  pointer-events:none;opacity:0;transition:opacity .25s;white-space:nowrap;
+}
+.gate-tip.show{opacity:1}
+</style>
+</head>
+<body>
+
+<div id="scene"></div>
+
+<header class="hud-header">
+  <a href="index.html" class="hud-back">← الواجهة الكلاسيكية</a>
+  <div class="hud-title hud-title-big">✨ EDAMA <span>— البوابة الغامرة</span></div>
+</header>
+
+<div class="hint glass" id="hint">انقر على بوابة مادة للدخول إليها — وفي VR صوّب بالليزر واضغط الزناد</div>
+<div class="gate-tip glass" id="gate-tip"></div>
+
+<script src="js/vendor/three.min.js"></script>
+<script src="js/vendor/OrbitControls.js"></script>
+<script src="js/vendor/VRButton.js"></script>
+<script src="js/xrlab.js"></script>
+<script>
+(function(){
+'use strict';
+
+var lab=XRLab.init({cameraPos:[0,2.2,9],target:[0,2.4,0],maxDistance:25,minDistance:3});
+var scene=lab.scene,camera=lab.camera,renderer=lab.renderer;
+
+/* ── subject gates arranged in an arc facing the viewer ── */
+var GATES=[
+  {name:'كيمياء',  icon:'⚗',  href:'chemistry.html', color:0x60a5fa, mini:'atom'},
+  {name:'رياضيات', icon:'π',  href:'math.html',      color:0xa78bfa, mini:'surface'},
+  {name:'فيزياء',  icon:'⚡', href:'physics.html',   color:0xf472b6, mini:'collide'},
+  {name:'أحياء',   icon:'🧬', href:null,             color:0x34d399, mini:'dna'},
+  {name:'علوم',    icon:'🌍', href:null,             color:0xfb923c, mini:'orbit'}
+];
+
+var ARC_R=7,gateGroups=[],pickables=[];
+
+GATES.forEach(function(g,i){
+  /* spread across a 150° arc in front of the viewer */
+  var ang=(-75+i*(150/(GATES.length-1)))*Math.PI/180;
+  var gx=Math.sin(ang)*ARC_R,gz=-Math.cos(ang)*ARC_R;
+
+  var grp=new THREE.Group();
+  grp.position.set(gx,2.4,gz);
+  grp.lookAt(0,2.4,0);
+  scene.add(grp);
+
+  var locked=!g.href;
+
+  /* portal ring */
+  var ring=new THREE.Mesh(
+    new THREE.TorusGeometry(1.5,.07,14,72),
+    new THREE.MeshStandardMaterial({
+      color:g.color,emissive:g.color,
+      emissiveIntensity:locked?.15:.65,
+      transparent:locked,opacity:locked?.4:1
+    })
+  );
+  grp.add(ring);
+
+  /* inner disc (portal surface) */
+  var disc=new THREE.Mesh(
+    new THREE.CircleGeometry(1.42,48),
+    new THREE.MeshBasicMaterial({color:g.color,transparent:true,opacity:locked?.04:.1,side:THREE.DoubleSide})
+  );
+  grp.add(disc);
+
+  /* glow */
+  var glow=new THREE.Sprite(new THREE.SpriteMaterial({
+    map:lab.glowTexture('rgba(255,255,255,.45)','rgba(120,160,255,.18)'),
+    transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+    color:g.color,opacity:locked?.25:.8
+  }));
+  glow.scale.setScalar(5.5);
+  grp.add(glow);
+
+  /* subject name */
+  var lbl=lab.textSprite(g.name,'#'+new THREE.Color(g.color).getHexString(),.62);
+  lbl.position.set(0,-2.15,0);
+  grp.add(lbl);
+  if(locked){
+    var soon=lab.textSprite('قريباً','#64748b',.34);
+    soon.position.set(0,-2.75,0);
+    grp.add(soon);
+  }
+
+  /* mini 3D icon inside the gate */
+  var mini=new THREE.Group();
+  grp.add(mini);
+  if(g.mini==='atom'){
+    var nuc=new THREE.Mesh(new THREE.SphereGeometry(.22,16,12),
+      new THREE.MeshStandardMaterial({color:0xef4444,emissive:0x661111,emissiveIntensity:.8}));
+    mini.add(nuc);
+    for(var k=0;k<2;k++){
+      var orbGrp=new THREE.Group();
+      orbGrp.rotation.x=k*1.1+.4;orbGrp.rotation.y=k*.8;
+      var orbit=new THREE.Mesh(new THREE.TorusGeometry(.78,.014,8,48),
+        new THREE.MeshBasicMaterial({color:g.color,transparent:true,opacity:.6}));
+      orbGrp.add(orbit);
+      var el=new THREE.Mesh(new THREE.SphereGeometry(.09,10,8),
+        new THREE.MeshStandardMaterial({color:0xfbbf24,emissive:0x7a5a00,emissiveIntensity:1}));
+      el.position.set(.78,0,0);
+      var pivot=new THREE.Group();
+      pivot.add(el);
+      orbGrp.add(pivot);
+      mini.add(orbGrp);
+      mini.userData['pivot'+k]=pivot;
+    }
+  }else if(g.mini==='surface'){
+    var sg=new THREE.PlaneGeometry(1.7,1.7,16,16);
+    sg.rotateX(-Math.PI/2.6);
+    var sm=new THREE.Mesh(sg,new THREE.MeshStandardMaterial({
+      color:g.color,emissive:g.color,emissiveIntensity:.4,wireframe:true,transparent:true,opacity:.9}));
+    mini.add(sm);
+    mini.userData.surf=sm;
+  }else if(g.mini==='collide'){
+    var b1=new THREE.Mesh(new THREE.SphereGeometry(.22,14,11),
+      new THREE.MeshStandardMaterial({color:0x3b82f6,emissive:0x0a2a66,emissiveIntensity:.7}));
+    var b2=new THREE.Mesh(new THREE.SphereGeometry(.17,14,11),
+      new THREE.MeshStandardMaterial({color:0xf97316,emissive:0x66290a,emissiveIntensity:.7}));
+    mini.add(b1);mini.add(b2);
+    mini.userData.b1=b1;mini.userData.b2=b2;
+  }else if(g.mini==='dna'){
+    for(var k=0;k<14;k++){
+      var t=k/13*Math.PI*2;
+      [1,-1].forEach(function(s){
+        var p=new THREE.Mesh(new THREE.SphereGeometry(.06,8,6),
+          new THREE.MeshStandardMaterial({color:g.color,emissive:g.color,emissiveIntensity:.5}));
+        p.position.set(Math.cos(t)*s*.45,(k/13-.5)*1.8,Math.sin(t)*s*.45);
+        mini.add(p);
+      });
+    }
+    mini.userData.spin=true;
+  }else{
+    var planet=new THREE.Mesh(new THREE.SphereGeometry(.36,18,14),
+      new THREE.MeshStandardMaterial({color:g.color,emissive:g.color,emissiveIntensity:.35}));
+    mini.add(planet);
+    var moonPivot=new THREE.Group();
+    var moon=new THREE.Mesh(new THREE.SphereGeometry(.09,10,8),
+      new THREE.MeshStandardMaterial({color:0xcbd5e1}));
+    moon.position.set(.85,0,0);
+    moonPivot.add(moon);
+    mini.add(moonPivot);
+    mini.userData.moon=moonPivot;
+  }
+
+  ring.userData.gate=g;
+  disc.userData.gate=g;
+  pickables.push(ring,disc);
+  gateGroups.push({grp:grp,ring:ring,glow:glow,mini:mini,gate:g,baseY:2.4,phase:i*1.3,locked:locked});
+});
+
+/* ── center logo ── */
+var logo=lab.textSprite('EDAMA','#60a5fa',1.1);
+logo.position.set(0,5.6,-3);
+scene.add(logo);
+var logo2=lab.textSprite('منصة التعلم الغامر','#94a3b8',.5);
+logo2.position.set(0,4.8,-3);
+scene.add(logo2);
+
+/* ── picking (mouse + VR controller) ── */
+var raycaster=new THREE.Raycaster();
+var mouse=new THREE.Vector2();
+var hovered=null;
+
+function pick(origin,dir){
+  raycaster.set(origin,dir);
+  var hits=raycaster.intersectObjects(pickables,false);
+  return hits.length?hits[0].object.userData.gate:null;
+}
+
+function setHover(gate){
+  hovered=gate;
+  var tip=document.getElementById('gate-tip');
+  if(gate){
+    document.body.style.cursor=gate.href?'pointer':'default';
+    tip.textContent=gate.href?('🚪 ادخل مختبر '+gate.name):(gate.name+' — قريباً');
+    tip.classList.add('show');
+  }else{
+    document.body.style.cursor='default';
+    tip.classList.remove('show');
+  }
+}
+
+window.addEventListener('pointermove',function(e){
+  mouse.x=(e.clientX/window.innerWidth)*2-1;
+  mouse.y=-(e.clientY/window.innerHeight)*2+1;
+  raycaster.setFromCamera(mouse,camera);
+  var hits=raycaster.intersectObjects(pickables,false);
+  setHover(hits.length?hits[0].object.userData.gate:null);
+});
+window.addEventListener('click',function(){
+  if(hovered&&hovered.href)window.location.href=hovered.href;
+});
+
+/* VR controller select */
+var tmpMat=new THREE.Matrix4();
+lab.onSelect(function(controller){
+  tmpMat.identity().extractRotation(controller.matrixWorld);
+  var origin=new THREE.Vector3().setFromMatrixPosition(controller.matrixWorld);
+  var dir=new THREE.Vector3(0,0,-1).applyMatrix4(tmpMat);
+  var gate=pick(origin,dir);
+  if(gate&&gate.href)window.location.href=gate.href;
+});
+
+/* ── ambience: floating particles ── */
+(function(){
+  var n=300,pos=new Float32Array(n*3);
+  for(var i=0;i<n;i++){
+    pos[i*3]=(Math.random()*2-1)*18;
+    pos[i*3+1]=Math.random()*9;
+    pos[i*3+2]=(Math.random()*2-1)*18;
+  }
+  var g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  var pts=new THREE.Points(g,new THREE.PointsMaterial({color:0x7d9bd6,size:.07,transparent:true,opacity:.8}));
+  scene.add(pts);
+  lab.onFrame(function(dt){pts.rotation.y+=dt*.008;});
+})();
+
+/* ── animation ── */
+lab.onFrame(function(dt,t){
+  for(var i=0;i<gateGroups.length;i++){
+    var G=gateGroups[i];
+    /* gates bob gently */
+    G.grp.position.y=G.baseY+Math.sin(t*.8+G.phase)*.12;
+    G.ring.rotation.z+=dt*(G.locked?.05:.25);
+    /* hover highlight */
+    var isHover=hovered===G.gate&&!G.locked;
+    G.ring.material.emissiveIntensity+=((isHover?1.4:G.locked?.15:.65)-G.ring.material.emissiveIntensity)*dt*8;
+    var wantScale=isHover?1.12:1;
+    G.grp.scale.x+=(wantScale-G.grp.scale.x)*dt*8;
+    G.grp.scale.y=G.grp.scale.z=G.grp.scale.x;
+
+    /* mini icons */
+    var m=G.mini,u=m.userData;
+    if(u.pivot0){u.pivot0.rotation.z+=dt*2.4;u.pivot1.rotation.z+=dt*1.9;}
+    if(u.surf){
+      var p=u.surf.geometry.attributes.position;
+      for(var v=0;v<p.count;v++){
+        var vx=p.getX(v),vz=p.getZ(v);
+        p.setY(v,Math.sin(vx*3+t*2)*Math.cos(vz*3+t*2)*.16);
+      }
+      p.needsUpdate=true;
+    }
+    if(u.b1){
+      var ph=(t*1.4+G.phase)%2;
+      var k=ph<1?ph:2-ph;          /* back-and-forth */
+      u.b1.position.x=-.75+k*.55;
+      u.b2.position.x=.75-k*.55;
+    }
+    if(u.spin)m.rotation.y+=dt*.9;
+    if(u.moon)u.moon.rotation.y+=dt*1.6;
+  }
+  logo.position.y=5.6+Math.sin(t*.6)*.08;
+});
+
+setTimeout(function(){document.getElementById('hint').classList.add('gone');},6000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>المعادلة التربيعية — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<style>
+body{overflow-x:hidden}
+.qd-wrap{max-width:1000px;margin:0 auto;padding:16px 16px 60px;display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start}
+.qd-left{flex:0 0 340px;display:flex;flex-direction:column;gap:14px}
+.qd-right{flex:1;min-width:260px;display:flex;flex-direction:column;gap:14px}
+#qd-canvas{background:#060a18;border-radius:14px;border:1.5px solid rgba(255,255,255,.1);display:block;width:100%}
+.slider-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px}
+.slider-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.slider-row:last-child{margin-bottom:0}
+.sl-name{font-size:1rem;font-weight:900;width:24px;text-align:center}
+.sl-input{flex:1;accent-color:#60a5fa;cursor:pointer}
+.sl-val{font-size:1rem;font-weight:900;width:42px;text-align:center;font-variant-numeric:tabular-nums}
+.eq-display{background:rgba(0,0,0,.3);border-radius:10px;padding:12px;text-align:center;font-size:1.1rem;font-weight:700;letter-spacing:.5px;border:1px solid rgba(255,255,255,.08)}
+.disc-card{border-radius:12px;padding:16px;border:2px solid;text-align:center}
+.disc-label{font-size:.75rem;color:var(--dim);margin-bottom:4px}
+.disc-val{font-size:2rem;font-weight:900;margin-bottom:6px}
+.disc-msg{font-size:.85rem;font-weight:700}
+.roots-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px}
+.roots-title{font-size:.75rem;color:var(--dim);margin-bottom:10px;font-weight:700}
+.root-chip{display:inline-block;padding:8px 16px;border-radius:8px;background:rgba(0,0,0,.25);font-size:1.05rem;font-weight:900;margin:3px}
+.info-box{background:rgba(255,255,255,.04);border-radius:12px;border:1px solid rgba(255,255,255,.08);padding:14px;font-size:.83rem;color:var(--dim);line-height:1.7}
+.info-box strong{color:var(--text)}
+@media(max-width:700px){.qd-left{flex:0 0 100%}}
+</style>
+</head>
+<body>
+<header class="portal-header">
+  <a href="math.html" class="portal-header-back">← رجوع</a>
+  <a href="quadratic-3d.html" class="portal-header-back" style="border-color:rgba(126,150,250,.45);color:#a5b8fc">🥽 النسخة الغامرة 3D</a>
+  <img src="images/logos/logo.png" alt="EDAMA" class="portal-logo-img"/>
+  <div class="portal-logo-wrap">
+    <div class="portal-logo">EDAMA <span>Virtual Technology</span></div>
+    <div class="portal-tagline">رياضيات — المعادلة التربيعية</div>
+  </div>
+</header>
+<div class="qd-wrap">
+  <div class="qd-left">
+    <canvas id="qd-canvas" width="340" height="300"></canvas>
+    <div class="slider-card">
+      <div class="slider-row">
+        <span class="sl-name" style="color:#f472b6">a</span>
+        <input class="sl-input" type="range" id="sl-a" min="-3" max="3" step="0.5" value="1" oninput="update()"/>
+        <span class="sl-val" id="vl-a" style="color:#f472b6">1</span>
+      </div>
+      <div class="slider-row">
+        <span class="sl-name" style="color:#60a5fa">b</span>
+        <input class="sl-input" type="range" id="sl-b" min="-8" max="8" step="1" value="-2" oninput="update()"/>
+        <span class="sl-val" id="vl-b" style="color:#60a5fa">-2</span>
+      </div>
+      <div class="slider-row">
+        <span class="sl-name" style="color:#34d399">c</span>
+        <input class="sl-input" type="range" id="sl-c" min="-9" max="9" step="1" value="-3" oninput="update()"/>
+        <span class="sl-val" id="vl-c" style="color:#34d399">-3</span>
+      </div>
+    </div>
+    <div class="eq-display" id="eq-display">ax² + bx + c = 0</div>
+  </div>
+  <div class="qd-right">
+    <div class="disc-card" id="disc-card">
+      <div class="disc-label">المميز Δ = b² - 4ac</div>
+      <div class="disc-val" id="disc-val">0</div>
+      <div class="disc-msg" id="disc-msg"></div>
+    </div>
+    <div class="roots-card">
+      <div class="roots-title">الجذور</div>
+      <div id="roots-display"></div>
+    </div>
+    <div class="info-box">
+      <strong>المعادلة التربيعية العامة:</strong><br/>
+      ax² + bx + c = 0<br/><br/>
+      <strong>الحل بالقانون العام:</strong><br/>
+      x = ( -b ± √Δ ) ÷ 2a &nbsp; | &nbsp; Δ = b² - 4ac<br/><br/>
+      <strong>تفسير المميز Δ:</strong><br/>
+      • Δ > 0 → جذران حقيقيان مختلفان (القطع المكافئ يقطع المحور مرتين)<br/>
+      • Δ = 0 → جذر حقيقي مضاعف (القطع المكافئ يماس المحور)<br/>
+      • Δ &lt; 0 → لا جذور حقيقية (القطع المكافئ لا يقطع المحور)
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+var cv=document.getElementById('qd-canvas'),ctx=cv.getContext('2d');
+var W=340,H=300;
+
+function getVals(){
+  var a=parseFloat(document.getElementById('sl-a').value)||0.001;
+  var b=parseFloat(document.getElementById('sl-b').value);
+  var c=parseFloat(document.getElementById('sl-c').value);
+  return{a:a,b:b,c:c};
+}
+
+function fmt(n){
+  if(Math.abs(n)<0.0001)return'0';
+  return n%1===0?String(n):n.toFixed(2);
+}
+
+function buildEq(a,b,c){
+  var s='';
+  if(a===1)s+='x²';
+  else if(a===-1)s+='-x²';
+  else s+=fmt(a)+'x²';
+  if(b>0)s+=' + '+fmt(b)+'x';
+  else if(b<0)s+=' - '+fmt(Math.abs(b))+'x';
+  if(c>0)s+=' + '+fmt(c);
+  else if(c<0)s+=' - '+fmt(Math.abs(c));
+  s+=' = 0';
+  return s;
+}
+
+function update(){
+  var v=getVals();
+  document.getElementById('vl-a').textContent=fmt(v.a);
+  document.getElementById('vl-b').textContent=fmt(v.b);
+  document.getElementById('vl-c').textContent=fmt(v.c);
+  document.getElementById('eq-display').textContent=buildEq(v.a,v.b,v.c);
+  var disc=v.b*v.b-4*v.a*v.c;
+  var dc=document.getElementById('disc-card');
+  document.getElementById('disc-val').textContent=fmt(disc);
+  var msg,col;
+  if(disc>0.001){col='#34d399';msg='جذران حقيقيان مختلفان';}
+  else if(disc>-0.001){col='#fbbf24';msg='جذر حقيقي مضاعف';}
+  else{col='#ef4444';msg='لا جذور حقيقية';}
+  document.getElementById('disc-val').style.color=col;
+  document.getElementById('disc-msg').textContent=msg;
+  document.getElementById('disc-msg').style.color=col;
+  dc.style.borderColor=col;dc.style.background='rgba(0,0,0,.2)';
+  var rd=document.getElementById('roots-display');
+  if(disc>=0){
+    var x1=(-v.b+Math.sqrt(disc))/(2*v.a);
+    var x2=(-v.b-Math.sqrt(disc))/(2*v.a);
+    if(Math.abs(x1-x2)<0.001){
+      rd.innerHTML='<span class="root-chip" style="color:'+col+'">x = '+fmt(x1)+'</span>';
+    }else{
+      rd.innerHTML='<span class="root-chip" style="color:#34d399">x₁ = '+fmt(x1)+'</span><span class="root-chip" style="color:#60a5fa">x₂ = '+fmt(x2)+'</span>';
+    }
+  }else{
+    var re=fmt(-v.b/(2*v.a));
+    var im=fmt(Math.sqrt(-disc)/(2*v.a));
+    rd.innerHTML='<span class="root-chip" style="color:#ef4444">x = '+re+' ± '+im+'i</span>';
+  }
+  drawGraph(v.a,v.b,v.c,disc);
+}
+
+function drawGraph(a,b,c,disc){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#060a18';ctx.fillRect(0,0,W,H);
+  // find range
+  var vx=-b/(2*a),vy=a*vx*vx+b*vx+c;
+  var xmin=vx-5,xmax=vx+5,ymin=vy-8,ymax=vy+8;
+  if(disc>=0){
+    var x1=(-b+Math.sqrt(Math.max(0,disc)))/(2*a);
+    var x2=(-b-Math.sqrt(Math.max(0,disc)))/(2*a);
+    xmin=Math.min(xmin,x1,x2)-2;xmax=Math.max(xmax,x1,x2)+2;
+  }
+  var xrange=xmax-xmin,yrange=ymax-ymin;
+  var pad=30;
+  function tx(x){return pad+(x-xmin)/xrange*(W-2*pad);}
+  function ty(y){return H-pad-(y-ymin)/yrange*(H-2*pad);}
+  // grid
+  ctx.strokeStyle='rgba(255,255,255,.06)';ctx.lineWidth=1;
+  for(var gx=Math.ceil(xmin);gx<=xmax;gx++){ctx.beginPath();ctx.moveTo(tx(gx),pad);ctx.lineTo(tx(gx),H-pad);ctx.stroke();}
+  for(var gy=Math.ceil(ymin);gy<=ymax;gy+=2){ctx.beginPath();ctx.moveTo(pad,ty(gy));ctx.lineTo(W-pad,ty(gy));ctx.stroke();}
+  // axes
+  ctx.strokeStyle='rgba(255,255,255,.25)';ctx.lineWidth=1.5;
+  if(ymin<0&&ymax>0){ctx.beginPath();ctx.moveTo(pad,ty(0));ctx.lineTo(W-pad,ty(0));ctx.stroke();}
+  if(xmin<0&&xmax>0){ctx.beginPath();ctx.moveTo(tx(0),pad);ctx.lineTo(tx(0),H-pad);ctx.stroke();}
+  // parabola
+  var col2=disc>0.001?'#34d399':disc>-0.001?'#fbbf24':'#ef4444';
+  ctx.beginPath();
+  var first=true;
+  for(var xi=xmin;xi<=xmax;xi+=xrange/200){
+    var yi=a*xi*xi+b*xi+c;
+    if(yi<ymin-1||yi>ymax+1){first=true;continue;}
+    if(first){ctx.moveTo(tx(xi),ty(yi));first=false;}
+    else ctx.lineTo(tx(xi),ty(yi));
+  }
+  ctx.strokeStyle=col2;ctx.lineWidth=2.5;ctx.stroke();
+  // vertex
+  if(vy>=ymin&&vy<=ymax){
+    ctx.beginPath();ctx.arc(tx(vx),ty(vy),5,0,Math.PI*2);
+    ctx.fillStyle='#fbbf24';ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.5)';ctx.font='10px sans-serif';ctx.textAlign='center';
+    ctx.fillText('رأس('+fmt(vx)+','+fmt(vy)+')',tx(vx),ty(vy)-10);
+  }
+  // roots
+  if(disc>=0){
+    var x1r=(-b+Math.sqrt(disc))/(2*a),x2r=(-b-Math.sqrt(disc))/(2*a);
+    [x1r,x2r].forEach(function(rx,i){
+      if(rx<xmin||rx>xmax)return;
+      ctx.beginPath();ctx.arc(tx(rx),ty(0),6,0,Math.PI*2);
+      ctx.fillStyle=i===0?'#34d399':'#60a5fa';ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,.6)';ctx.font='10px sans-serif';ctx.textAlign='center';
+      ctx.fillText('x'+(i+1)+'='+fmt(rx),tx(rx),ty(0)+15);
+    });
+  }
+}
+
+window.update=update;
+update();
+})();
+</script>
+</body>
+</html>

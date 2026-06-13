@@ -1,0 +1,219 @@
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;700;900&display=swap');
+
+:root{
+  --bg:#06091a;--bg2:#0c1228;--surface:rgba(255,255,255,.05);
+  --border:rgba(255,255,255,.1);--text:#e2e8f0;--dim:#94a3b8;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:'Tajawal','Cairo',Arial,sans-serif;
+  direction:rtl;min-height:100vh;overflow-x:hidden;
+}
+
+/* ── PORTAL HEADER ── */
+.portal-header{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 24px;
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:40;
+}
+.portal-logo-img{
+  height:42px;width:auto;
+  /* removes white background from logo using multiply blend mode */
+  mix-blend-mode:screen;
+  filter:contrast(1.05);
+}
+.portal-logo-wrap{display:flex;flex-direction:column;gap:1px}
+.portal-logo{font-size:1.5rem;font-weight:900;color:#60a5fa;letter-spacing:-.5px}
+.portal-logo span{color:#a78bfa}
+.portal-tagline{font-size:.78rem;color:var(--dim);margin-top:0;letter-spacing:.3px}
+.portal-header-back{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:6px 14px;border-radius:8px;
+  background:rgba(255,255,255,.07);border:1.5px solid var(--border);
+  color:var(--dim);font-size:.88rem;font-weight:700;
+  text-decoration:none;transition:all .18s;
+}
+.portal-header-back:hover{border-color:#60a5fa;color:#60a5fa}
+
+/* ── HERO (landing only) ── */
+.portal-hero{
+  text-align:center;padding:56px 20px 32px;
+}
+.portal-hero h1{
+  font-size:clamp(2rem,5vw,3.2rem);font-weight:900;
+  background:linear-gradient(135deg,#60a5fa,#a78bfa,#34d399);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  margin-bottom:12px;line-height:1.15;
+}
+.portal-hero p{font-size:1.05rem;color:var(--dim);max-width:520px;margin:0 auto 32px;}
+
+/* ── SUBJECT GRID ── */
+.subjects-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:20px;
+  max-width:1100px;margin:0 auto;padding:0 24px 60px;
+}
+.subject-card{
+  position:relative;overflow:hidden;
+  background:var(--bg2);border:1.5px solid var(--border);
+  border-radius:18px;padding:32px 24px 28px;
+  text-decoration:none;color:var(--text);
+  display:flex;flex-direction:column;align-items:flex-start;gap:10px;
+  cursor:pointer;transition:transform .22s,border-color .22s,box-shadow .22s;
+}
+.subject-card::before{
+  content:'';position:absolute;inset:0;opacity:0;
+  transition:opacity .3s;
+  background:radial-gradient(circle at 30% 40%,var(--clr,.3) 0%,transparent 65%);
+}
+.subject-card:hover{transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,.4);}
+.subject-card:hover::before{opacity:.18}
+.subject-card:hover{border-color:var(--clr,#60a5fa)}
+.subject-card.locked{cursor:default;opacity:.55}
+.subject-card.locked:hover{transform:none;box-shadow:none}
+
+.sc-icon{font-size:2.8rem;line-height:1}
+.sc-name{font-size:1.45rem;font-weight:900}
+.sc-desc{font-size:.82rem;color:var(--dim);line-height:1.5}
+.sc-count{
+  margin-top:6px;font-size:.75rem;font-weight:700;
+  padding:3px 10px;border-radius:20px;
+  background:rgba(255,255,255,.07);color:var(--dim);
+}
+.sc-count.has-labs{background:rgba(96,165,250,.14);color:#60a5fa}
+.badge-soon{
+  position:absolute;top:14px;left:14px;
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
+  color:var(--dim);font-size:.68rem;font-weight:700;
+  padding:2px 9px;border-radius:20px;
+}
+
+/* ── SUBJECT PAGE ── */
+.subject-hero{
+  padding:36px 24px 24px;max-width:1100px;margin:0 auto;
+  display:flex;align-items:center;gap:16px;
+}
+.subject-hero-icon{font-size:3rem}
+.subject-hero h1{font-size:clamp(1.6rem,4vw,2.4rem);font-weight:900}
+.subject-hero p{font-size:.9rem;color:var(--dim);margin-top:4px}
+
+.labs-section{max-width:1100px;margin:0 auto;padding:0 24px 60px;}
+.labs-section-title{
+  font-size:.75rem;font-weight:700;color:var(--dim);
+  text-transform:uppercase;letter-spacing:2px;
+  margin-bottom:14px;padding-right:4px;
+}
+
+/* ── LAB CARDS ── */
+.labs-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+  gap:16px;margin-bottom:36px;
+}
+.lab-card{
+  background:var(--bg2);border:1.5px solid var(--border);
+  border-radius:14px;padding:22px 20px;
+  text-decoration:none;color:var(--text);
+  display:flex;flex-direction:column;gap:8px;
+  transition:transform .2s,border-color .2s,box-shadow .2s;
+  position:relative;overflow:hidden;
+}
+.lab-card::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,var(--clr,#60a5fa) 0%,transparent 60%);
+  opacity:0;transition:opacity .25s;
+}
+.lab-card:hover:not(.lab-locked){
+  transform:translateY(-3px);
+  border-color:var(--clr,#60a5fa);
+  box-shadow:0 8px 28px rgba(0,0,0,.35);
+}
+.lab-card:hover:not(.lab-locked)::after{opacity:.06}
+.lab-locked{cursor:default;opacity:.5}
+
+.lc-icon{font-size:2rem;line-height:1}
+.lc-name{font-size:1.1rem;font-weight:900}
+.lc-desc{font-size:.8rem;color:var(--dim);line-height:1.5}
+.lc-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+.lc-tag{
+  font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:10px;
+  background:rgba(255,255,255,.07);color:var(--dim);
+}
+.lc-badge-soon{
+  position:absolute;top:12px;left:12px;
+  background:rgba(255,200,50,.12);border:1px solid rgba(255,200,50,.25);
+  color:#fbbf24;font-size:.65rem;font-weight:700;
+  padding:2px 8px;border-radius:10px;
+}
+.lc-badge-new{
+  position:absolute;top:12px;left:12px;
+  background:rgba(52,211,153,.14);border:1px solid rgba(52,211,153,.3);
+  color:#34d399;font-size:.65rem;font-weight:700;
+  padding:2px 8px;border-radius:10px;
+}
+
+/* ── FOOTER ── */
+.portal-footer{
+  text-align:center;padding:20px;
+  color:var(--dim);font-size:.78rem;
+  border-top:1px solid var(--border);
+}
+
+/* ── 3D BACKGROUND LAYER ── */
+.bg3d{position:fixed;inset:0;z-index:0;pointer-events:none}
+.bg3d canvas{display:block}
+body>*:not(.bg3d){position:relative;z-index:1}
+
+/* glass treatment so cards float above the 3D scene */
+.subject-card,.lab-card{
+  background:rgba(12,18,40,.55);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+}
+.portal-header{
+  background:rgba(8,12,30,.65);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+}
+
+/* ── ENTRANCE ANIMATIONS ── */
+@keyframes riseIn{
+  from{opacity:0;transform:translateY(26px)}
+  to{opacity:1;transform:translateY(0)}
+}
+.portal-hero h1,.portal-hero p,.subject-hero{animation:riseIn .7s cubic-bezier(.2,.7,.3,1) both}
+.portal-hero p{animation-delay:.12s}
+.subjects-grid .subject-card,.labs-grid .lab-card{animation:riseIn .6s cubic-bezier(.2,.7,.3,1) both}
+.subjects-grid>*:nth-child(1),.labs-grid>*:nth-child(1){animation-delay:.08s}
+.subjects-grid>*:nth-child(2),.labs-grid>*:nth-child(2){animation-delay:.16s}
+.subjects-grid>*:nth-child(3),.labs-grid>*:nth-child(3){animation-delay:.24s}
+.subjects-grid>*:nth-child(4),.labs-grid>*:nth-child(4){animation-delay:.32s}
+.subjects-grid>*:nth-child(5),.labs-grid>*:nth-child(5){animation-delay:.4s}
+@media(prefers-reduced-motion:reduce){
+  .portal-hero h1,.portal-hero p,.subject-hero,.subject-card,.lab-card{animation:none}
+}
+
+/* ── VR BADGE ── */
+.badge-vr{
+  display:inline-flex;align-items:center;gap:7px;
+  margin-top:4px;padding:6px 16px;border-radius:24px;
+  background:linear-gradient(135deg,rgba(96,165,250,.16),rgba(167,139,250,.16));
+  border:1px solid rgba(126,150,250,.4);
+  color:#a5b8fc;font-size:.8rem;font-weight:700;letter-spacing:.4px;
+  animation:vrPulse 2.6s ease-in-out infinite;
+}
+@keyframes vrPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(126,150,250,.25)}
+  50%{box-shadow:0 0 22px 4px rgba(126,150,250,.18)}
+}
+.lc-badge-3d{
+  position:absolute;top:12px;left:12px;
+  background:linear-gradient(135deg,rgba(96,165,250,.2),rgba(167,139,250,.2));
+  border:1px solid rgba(126,150,250,.45);
+  color:#a5b8fc;font-size:.65rem;font-weight:900;
+  padding:2px 9px;border-radius:10px;letter-spacing:.5px;
+  animation:vrPulse 2.6s ease-in-out infinite;
+}

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>الأعداد الأولية — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<style>
+body{overflow-x:hidden}
+.pm-wrap{max-width:900px;margin:0 auto;padding:16px 16px 60px;display:flex;flex-direction:column;gap:16px}
+.pm-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:12px 16px;background:rgba(255,255,255,.04);border-radius:12px;border:1px solid rgba(255,255,255,.08)}
+.pm-btn{padding:9px 22px;border-radius:9px;border:none;font-family:inherit;font-size:.95rem;font-weight:700;cursor:pointer;transition:all .18s}
+#btn-start{background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff}
+#btn-start:hover{opacity:.88}
+#btn-reset{background:rgba(255,255,255,.08);color:var(--text);border:1.5px solid rgba(255,255,255,.12)}
+#btn-reset:hover{border-color:#60a5fa;color:#60a5fa}
+.speed-row{display:flex;align-items:center;gap:10px}
+.speed-row label{font-size:.8rem;color:var(--dim);font-weight:700;white-space:nowrap}
+#sl-speed{accent-color:#60a5fa;cursor:pointer;width:90px}
+.pm-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.pm-stat{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px;text-align:center}
+.pm-stat-label{font-size:.72rem;color:var(--dim);margin-bottom:4px}
+.pm-stat-val{font-size:1.5rem;font-weight:900;color:#60a5fa}
+.pm-step-info{background:rgba(251,191,36,.08);border:1.5px solid rgba(251,191,36,.25);border-radius:10px;padding:12px 16px;font-size:.88rem;color:#fbbf24;font-weight:700;min-height:42px;display:flex;align-items:center}
+.grid-wrap{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:14px;overflow:auto}
+.num-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;min-width:340px}
+.num-cell{
+  aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  border-radius:6px;font-size:.8rem;font-weight:700;
+  background:rgba(255,255,255,.06);color:var(--dim);
+  border:1.5px solid transparent;
+  transition:background .25s,color .25s,border-color .25s;
+}
+.num-cell.prime{background:rgba(96,165,250,.2);color:#60a5fa;border-color:rgba(96,165,250,.45)}
+.num-cell.current{background:rgba(251,191,36,.25);color:#fbbf24;border-color:#fbbf24;transform:scale(1.1)}
+.num-cell.composite{background:rgba(239,68,68,.1);color:rgba(239,68,68,.5);border-color:transparent;text-decoration:line-through}
+.num-cell.one{background:rgba(255,255,255,.04);color:rgba(255,255,255,.25)}
+.pm-info{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px;font-size:.83rem;color:var(--dim);line-height:1.75}
+.pm-info strong{color:var(--text)}
+.primes-list{margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;max-height:80px;overflow:hidden}
+.p-chip{padding:3px 9px;border-radius:6px;background:rgba(96,165,250,.15);color:#60a5fa;font-size:.78rem;font-weight:700}
+</style>
+</head>
+<body>
+<header class="portal-header">
+  <a href="math.html" class="portal-header-back">← رجوع</a>
+  <a href="primes-3d.html" class="portal-header-back" style="border-color:rgba(126,150,250,.45);color:#a5b8fc">🥽 النسخة الغامرة 3D</a>
+  <img src="images/logos/logo.png" alt="EDAMA" class="portal-logo-img"/>
+  <div class="portal-logo-wrap">
+    <div class="portal-logo">EDAMA <span>Virtual Technology</span></div>
+    <div class="portal-tagline">رياضيات — الأعداد الأولية</div>
+  </div>
+</header>
+<div class="pm-wrap">
+  <div class="pm-controls">
+    <button class="pm-btn" id="btn-start" onclick="startSieve()">▶ ابدأ المنخل</button>
+    <button class="pm-btn" id="btn-reset" onclick="resetSieve()">↺ إعادة</button>
+    <div class="speed-row">
+      <label>السرعة</label>
+      <input type="range" id="sl-speed" min="1" max="10" value="5"/>
+    </div>
+  </div>
+  <div class="pm-stats">
+    <div class="pm-stat"><div class="pm-stat-label">العدد الحالي</div><div class="pm-stat-val" id="st-cur">—</div></div>
+    <div class="pm-stat"><div class="pm-stat-label">الأعداد الأولية</div><div class="pm-stat-val" id="st-count" style="color:#34d399">0</div></div>
+    <div class="pm-stat"><div class="pm-stat-label">المحذوفة</div><div class="pm-stat-val" id="st-comp" style="color:#ef4444">0</div></div>
+  </div>
+  <div class="pm-step-info" id="step-info">منخل إراتوستينس — اضغط ابدأ لترى كيف تُكتشف الأعداد الأولية!</div>
+  <div class="grid-wrap"><div class="num-grid" id="num-grid"></div></div>
+  <div class="pm-info">
+    <strong>ما هو العدد الأولي؟</strong><br/>
+    عدد لا يقبل القسمة إلا على 1 وعلى نفسه. مثل: 2، 3، 5، 7، 11، 13...<br/><br/>
+    <strong>منخل إراتوستينس (250 ق.م):</strong><br/>
+    نبدأ من 2 — نحذف كل مضاعفاته. ننتقل للعدد التالي غير المحذوف — نحذف مضاعفاته. وهكذا...<br/>
+    ما تبقى هي الأعداد الأولية!<br/><br/>
+    <strong>الأعداد الأولية المكتشفة:</strong>
+    <div class="primes-list" id="primes-list"></div>
+  </div>
+</div>
+<script>
+(function(){
+var N=120,cells=[],sieve=[],compositeArr=[],primesList=[];
+var running=false,timer=null,curP=2;
+
+function buildGrid(){
+  var g=document.getElementById('num-grid');
+  g.innerHTML='';cells=[];sieve=new Array(N+1).fill(false);compositeArr=new Array(N+1).fill(false);primesList=[];
+  for(var i=1;i<=N;i++){
+    var d=document.createElement('div');
+    d.className='num-cell'+(i===1?' one':'');
+    d.textContent=i;d.id='nc-'+i;g.appendChild(d);cells[i]=d;
+  }
+  document.getElementById('st-cur').textContent='—';
+  document.getElementById('st-count').textContent='0';
+  document.getElementById('st-comp').textContent='0';
+  document.getElementById('step-info').textContent='منخل إراتوستينس — اضغط ابدأ لترى كيف تُكتشف الأعداد الأولية!';
+  document.getElementById('primes-list').innerHTML='';
+}
+
+function startSieve(){
+  if(running)return;
+  buildGrid();running=true;curP=2;
+  document.getElementById('btn-start').disabled=true;
+  nextStep();
+}
+
+function resetSieve(){
+  running=false;if(timer)clearTimeout(timer);
+  document.getElementById('btn-start').disabled=false;
+  buildGrid();
+}
+
+function nextStep(){
+  if(!running)return;
+  // find next unmarked p >= curP
+  while(curP<=N&&compositeArr[curP])curP++;
+  if(curP>N){finish();return;}
+  // mark curP as prime
+  sieve[curP]=true;primesList.push(curP);
+  cells[curP].className='num-cell current';
+  document.getElementById('st-cur').textContent=curP;
+  document.getElementById('st-count').textContent=primesList.length;
+  document.getElementById('step-info').textContent=curP+' عدد أولي! سنحذف مضاعفاته: '+curP*2+', '+curP*3+'...';
+  // after short pause, cross out multiples
+  var delay=Math.round(1100/parseInt(document.getElementById('sl-speed').value));
+  timer=setTimeout(function(){
+    var comp=0;
+    for(var m=curP*2;m<=N;m+=curP){
+      if(!compositeArr[m]){compositeArr[m]=true;cells[m].className='num-cell composite';comp++;}
+    }
+    cells[curP].className='num-cell prime';
+    document.getElementById('st-comp').textContent=Object.values(compositeArr).filter(Boolean).length;
+    var pl=document.getElementById('primes-list');
+    pl.innerHTML=primesList.map(function(p){return'<span class="p-chip">'+p+'</span>';}).join('');
+    curP++;
+    timer=setTimeout(nextStep,delay/2);
+  },delay);
+}
+
+function finish(){
+  running=false;document.getElementById('btn-start').disabled=false;
+  document.getElementById('step-info').textContent='✅ اكتمل المنخل! وجدنا '+primesList.length+' عدداً أولياً بين 1 و'+N;
+  document.getElementById('st-cur').textContent='✓';
+}
+
+window.startSieve=startSieve;window.resetSieve=resetSieve;
+buildGrid();
+})();
+</script>
+</body>
+</html>

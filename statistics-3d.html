@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<title>مدينة البيانات — الإحصاء الغامر — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<link rel="stylesheet" href="css/xrlab.css"/>
+<style>
+.data-input{
+  width:100%;padding:9px 11px;border-radius:10px;
+  background:rgba(0,0,0,.4);border:1.5px solid rgba(255,255,255,.15);
+  color:#e2e8f0;font-family:Consolas,monospace;font-size:.88rem;font-weight:700;
+  direction:ltr;text-align:left;outline:none;
+}
+.data-input:focus{border-color:#60a5fa}
+.data-input.err{border-color:#ef4444}
+</style>
+</head>
+<body>
+
+<div id="scene"></div>
+
+<header class="hud-header">
+  <a href="math.html" class="hud-back">← رجوع</a>
+  <div class="hud-title">🏙️ مدينة البيانات <span>— الإحصاء الغامر</span></div>
+  <a href="statistics.html" class="hud-2d">📊 الوضع المبسّط 2D</a>
+</header>
+
+<div class="hint glass" id="hint">كل رقم برج متوهج — والمستوى الذهبي هو المتوسط الحسابي يطفو فوق المدينة</div>
+
+<div class="side-panel">
+  <div class="glass sp-section">
+    <div class="sp-title">البيانات (أرقام مفصولة بفواصل)</div>
+    <input class="data-input" id="data" value="12, 17, 9, 25, 17, 14, 21, 8, 17, 19" spellcheck="false"/>
+    <div style="height:8px"></div>
+    <button class="sp-btn secondary" id="btn-random">🎲 بيانات عشوائية</button>
+  </div>
+
+  <div class="glass sp-section">
+    <div class="sp-title">المقاييس الإحصائية</div>
+    <div class="sp-stats">
+      <div class="sp-stat"><div class="sp-stat-l" style="color:#fbbf24">المتوسط</div><div class="sp-stat-v" id="mean-v">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l" style="color:#34d399">الوسيط</div><div class="sp-stat-v" id="median-v">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l" style="color:#f472b6">المنوال</div><div class="sp-stat-v" id="mode-v">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l">المدى</div><div class="sp-stat-v" id="range-v">—</div></div>
+      <div class="sp-stat" style="grid-column:1/-1"><div class="sp-stat-l">الانحراف المعياري σ</div><div class="sp-stat-v" id="std-v">—</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="ctl-bar glass">
+  <button class="ctl-btn on" id="btn-mean">🟡 مستوى المتوسط</button>
+  <button class="ctl-btn on" id="btn-median">🟢 مستوى الوسيط</button>
+  <button class="ctl-btn on" id="btn-spin">🔄 دوران</button>
+</div>
+
+<script src="js/vendor/three.min.js"></script>
+<script src="js/vendor/OrbitControls.js"></script>
+<script src="js/vendor/VRButton.js"></script>
+<script src="js/xrlab.js"></script>
+<script>
+(function(){
+'use strict';
+
+var lab=XRLab.init({cameraPos:[6,5,11],target:[0,2,0],maxDistance:45});
+var scene=lab.scene;
+
+var city=new THREE.Group();
+scene.add(city);
+
+var HMAX=4.6;            /* world height of tallest tower */
+var TW=.55,TGAP=.3;      /* tower width / gap */
+
+var towers=[],valueLabels=[];
+var meanPlane=null,medianPlane=null,meanLbl=null,medianLbl=null;
+var showMean=true,showMedian=true,spin=true;
+
+function colorFor(t){
+  /* blue → purple → pink gradient by relative height */
+  var c1=new THREE.Color(0x3b82f6),c2=new THREE.Color(0xa855f7),c3=new THREE.Color(0xec4899);
+  return t<.5?c1.clone().lerp(c2,t*2):c2.clone().lerp(c3,(t-.5)*2);
+}
+
+function parse(src){
+  var parts=src.split(/[,\s،]+/).filter(function(s){return s.length;});
+  if(!parts.length||parts.length>24)return null;
+  var vals=[];
+  for(var i=0;i<parts.length;i++){
+    var v=parseFloat(parts[i]);
+    if(!isFinite(v)||v<0)return null;
+    vals.push(v);
+  }
+  return vals;
+}
+
+function stats(vals){
+  var n=vals.length;
+  var sum=vals.reduce(function(a,b){return a+b;},0);
+  var mean=sum/n;
+  var sorted=vals.slice().sort(function(a,b){return a-b;});
+  var median=n%2?sorted[(n-1)/2]:(sorted[n/2-1]+sorted[n/2])/2;
+  var freq={},best=0,mode=null,multi=false;
+  vals.forEach(function(v){
+    freq[v]=(freq[v]||0)+1;
+    if(freq[v]>best){best=freq[v];mode=v;}
+  });
+  if(best===1)mode=null;
+  var variance=vals.reduce(function(a,b){return a+(b-mean)*(b-mean);},0)/n;
+  return{mean:mean,median:median,mode:mode,modeCount:best,
+         range:sorted[n-1]-sorted[0],std:Math.sqrt(variance),max:sorted[n-1]};
+}
+
+function fmt(n){return Math.round(n*100)/100;}
+
+function clearCity(){
+  while(city.children.length)city.remove(city.children[0]);
+  towers=[];valueLabels=[];
+  meanPlane=medianPlane=meanLbl=medianLbl=null;
+}
+
+function build(vals){
+  clearCity();
+  var st=stats(vals);
+  var n=vals.length;
+  var scale=HMAX/Math.max(st.max,.001);
+  var totalW=n*(TW+TGAP);
+
+  /* platform */
+  var plat=new THREE.Mesh(
+    new THREE.BoxGeometry(totalW+1.2,.14,2.4),
+    new THREE.MeshStandardMaterial({color:0x101a3a,roughness:.4,metalness:.55})
+  );
+  plat.position.y=.07;
+  city.add(plat);
+
+  for(var i=0;i<n;i++){
+    var h=Math.max(vals[i]*scale,.06);
+    var t=st.max?vals[i]/st.max:0;
+    var col=colorFor(t);
+    var isMode=st.mode!==null&&vals[i]===st.mode;
+    var tw=new THREE.Mesh(
+      new THREE.BoxGeometry(TW,h,TW),
+      new THREE.MeshStandardMaterial({
+        color:col,roughness:.3,metalness:.35,
+        emissive:col,emissiveIntensity:isMode?.85:.3
+      })
+    );
+    var x=(i+.5)*(TW+TGAP)-totalW/2;
+    tw.position.set(x,.14+h/2,0);
+    tw.userData.isMode=isMode;
+    city.add(tw);
+    towers.push(tw);
+
+    var lbl=lab.textSprite(String(vals[i]),isMode?'#f472b6':'#cbd5e1',.34);
+    lbl.position.set(x,.14+h+.42,0);
+    city.add(lbl);
+    valueLabels.push(lbl);
+  }
+
+  /* mean / median floating planes */
+  function levelPlane(value,colorHex,label){
+    var y=.14+value*scale;
+    var p=new THREE.Mesh(
+      new THREE.BoxGeometry(totalW+1.6,.02,2.8),
+      new THREE.MeshBasicMaterial({color:colorHex,transparent:true,opacity:.28})
+    );
+    p.position.y=y;
+    city.add(p);
+    var l=lab.textSprite(label+' = '+fmt(value),'#'+new THREE.Color(colorHex).getHexString(),.4);
+    l.position.set(totalW/2+1.6,y,0);
+    city.add(l);
+    return[p,l];
+  }
+  var mp=levelPlane(st.mean,0xfbbf24,'المتوسط');
+  meanPlane=mp[0];meanLbl=mp[1];
+  var dp=levelPlane(st.median,0x34d399,'الوسيط');
+  medianPlane=dp[0];medianLbl=dp[1];
+  meanPlane.visible=meanLbl.visible=showMean;
+  medianPlane.visible=medianLbl.visible=showMedian;
+
+  /* readouts */
+  document.getElementById('mean-v').textContent=fmt(st.mean);
+  document.getElementById('median-v').textContent=fmt(st.median);
+  document.getElementById('mode-v').textContent=st.mode===null?'لا يوجد':fmt(st.mode)+' ×'+st.modeCount;
+  document.getElementById('range-v').textContent=fmt(st.range);
+  document.getElementById('std-v').textContent=fmt(st.std);
+}
+
+function onInput(){
+  var el=document.getElementById('data');
+  var vals=parse(el.value);
+  el.classList.toggle('err',!vals);
+  if(vals)build(vals);
+}
+document.getElementById('data').addEventListener('input',onInput);
+
+function randomData(){
+  var n=8+Math.floor(Math.random()*8);
+  var base=10+Math.random()*20;
+  var vals=[];
+  for(var i=0;i<n;i++)vals.push(Math.max(1,Math.round(base+(Math.random()-.5)*base)));
+  document.getElementById('data').value=vals.join(', ');
+  onInput();
+}
+document.getElementById('btn-random').onclick=randomData;
+lab.onSelect(randomData);
+
+document.getElementById('btn-mean').onclick=function(){
+  showMean=!showMean;this.classList.toggle('on',showMean);
+  if(meanPlane){meanPlane.visible=meanLbl.visible=showMean;}
+};
+document.getElementById('btn-median').onclick=function(){
+  showMedian=!showMedian;this.classList.toggle('on',showMedian);
+  if(medianPlane){medianPlane.visible=medianLbl.visible=showMedian;}
+};
+document.getElementById('btn-spin').onclick=function(){
+  spin=!spin;this.classList.toggle('on',spin);
+};
+
+lab.onFrame(function(dt,t){
+  if(spin)city.rotation.y+=dt*.08;
+  /* mode towers pulse */
+  for(var i=0;i<towers.length;i++){
+    if(towers[i].userData.isMode)
+      towers[i].material.emissiveIntensity=.7+Math.sin(t*3.2)*.3;
+  }
+});
+
+onInput();
+setTimeout(function(){document.getElementById('hint').classList.add('gone');},5500);
+})();
+</script>
+</body>
+</html>

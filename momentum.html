@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>كمية التحرك — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<style>
+body{overflow-x:hidden}
+.mom-wrap{max-width:1100px;margin:0 auto;padding:16px 16px 60px;display:flex;flex-direction:column;gap:16px}
+
+/* ── top controls ── */
+.top-bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+  padding:12px 16px;background:rgba(255,255,255,.04);
+  border-radius:12px;border:1px solid rgba(255,255,255,.08)}
+.collision-tabs{display:flex;gap:6px}
+.ctab{padding:8px 16px;border-radius:8px;border:1.5px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.04);color:var(--dim);font-family:inherit;
+  font-size:.85rem;font-weight:700;cursor:pointer;transition:all .15s}
+.ctab:hover{border-color:#60a5fa;color:#60a5fa}
+.ctab.active{border-color:#60a5fa;background:rgba(96,165,250,.14);color:#60a5fa}
+.run-btn{padding:9px 22px;border-radius:9px;border:none;font-family:inherit;
+  font-size:.95rem;font-weight:700;cursor:pointer;
+  background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;transition:opacity .18s}
+.run-btn:hover{opacity:.85}
+.reset-btn{padding:9px 18px;border-radius:9px;border:1.5px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.05);color:var(--dim);font-family:inherit;
+  font-size:.9rem;font-weight:700;cursor:pointer}
+.reset-btn:hover{border-color:#ef4444;color:#ef4444}
+
+/* ── canvas ── */
+#mom-canvas{display:block;width:100%;background:#060a18;
+  border-radius:16px;border:1.5px solid rgba(255,255,255,.1)}
+
+/* ── two-column controls ── */
+.objects-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.obj-card{border-radius:14px;padding:16px;border:2px solid}
+.obj-card.A{border-color:rgba(96,165,250,.4);background:rgba(96,165,250,.05)}
+.obj-card.B{border-color:rgba(251,146,60,.4);background:rgba(251,146,60,.05)}
+.obj-title{font-size:.9rem;font-weight:900;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.obj-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0}
+.slider-block{display:flex;flex-direction:column;gap:8px}
+.sl-row{display:flex;align-items:center;gap:8px}
+.sl-lbl{font-size:.78rem;color:var(--dim);width:72px;flex-shrink:0}
+.sl-inp{flex:1;accent-color:#60a5fa;cursor:pointer}
+.sl-num{font-size:.88rem;font-weight:900;width:52px;text-align:left;font-variant-numeric:tabular-nums}
+.momentum-display{margin-top:10px;padding:8px 12px;border-radius:8px;
+  background:rgba(0,0,0,.25);display:flex;align-items:center;justify-content:space-between}
+.mom-label{font-size:.72rem;color:var(--dim)}
+.mom-val{font-size:1.1rem;font-weight:900}
+
+/* ── conservation panel ── */
+.conservation-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
+  border-radius:14px;padding:16px}
+.cons-title{font-size:.82rem;font-weight:900;color:var(--dim);
+  text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+.cons-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.cons-before,.cons-after{display:flex;align-items:center;gap:8px;flex:1;min-width:200px}
+.cons-block{flex:1;padding:10px 12px;border-radius:10px;text-align:center}
+.cons-block.a-block{background:rgba(96,165,250,.12);border:1.5px solid rgba(96,165,250,.3)}
+.cons-block.b-block{background:rgba(251,146,60,.12);border:1.5px solid rgba(251,146,60,.3)}
+.cons-block.total-block{background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.15)}
+.cons-plus{font-size:1.2rem;font-weight:900;color:var(--dim)}
+.cons-eq{font-size:1.3rem;font-weight:900;color:var(--dim)}
+.cons-lbl{font-size:.68rem;color:var(--dim);margin-bottom:2px}
+.cons-num{font-size:1rem;font-weight:900;font-variant-numeric:tabular-nums}
+.cons-bar-wrap{height:10px;background:rgba(255,255,255,.07);border-radius:5px;overflow:hidden;margin-top:4px}
+.cons-bar-fill{height:100%;border-radius:5px;transition:width .4s ease}
+.law-badge{display:inline-flex;align-items:center;gap:8px;
+  padding:8px 14px;border-radius:10px;
+  background:rgba(52,211,153,.1);border:1.5px solid rgba(52,211,153,.3);
+  color:#34d399;font-size:.82rem;font-weight:700}
+.law-badge.violated{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#ef4444}
+.cons-separator{text-align:center;font-size:.75rem;color:var(--dim);padding:4px 0}
+
+/* ── info cards ── */
+.info-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.info-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
+  border-left:3px solid;border-radius:10px;padding:12px 14px;
+  font-size:.82rem;color:var(--dim);line-height:1.7}
+.info-card strong{display:block;font-size:.9rem;color:var(--text);margin-bottom:4px}
+.formula-box{background:rgba(0,0,0,.25);border-radius:8px;padding:8px 12px;
+  text-align:center;font-size:1rem;font-weight:700;margin-top:6px;letter-spacing:.5px}
+
+@media(max-width:650px){
+  .objects-row{grid-template-columns:1fr}
+  .cons-row{flex-direction:column}
+}
+</style>
+</head>
+<body>
+<header class="portal-header">
+  <a href="physics.html" class="portal-header-back">← رجوع</a>
+  <a href="momentum-3d.html" class="portal-header-back" style="border-color:rgba(126,150,250,.45);color:#a5b8fc">🥽 النسخة الغامرة 3D</a>
+  <img src="images/logos/logo.png" alt="EDAMA" class="portal-logo-img"/>
+  <div class="portal-logo-wrap">
+    <div class="portal-logo">EDAMA <span>Virtual Technology</span></div>
+    <div class="portal-tagline">فيزياء — كمية التحرك والتصادم</div>
+  </div>
+</header>
+
+<div class="mom-wrap">
+
+  <!-- top bar -->
+  <div class="top-bar">
+    <span style="font-size:.82rem;color:var(--dim);font-weight:700">نوع التصادم:</span>
+    <div class="collision-tabs">
+      <button class="ctab active" id="ct-elastic"   onclick="setCollision('elastic')">مرن تام</button>
+      <button class="ctab"         id="ct-inelastic" onclick="setCollision('inelastic')">غير مرن</button>
+      <button class="ctab"         id="ct-perfect"   onclick="setCollision('perfect')">لاصق تام</button>
+    </div>
+    <span style="flex:1"></span>
+    <button class="reset-btn" onclick="resetSim()">↺ إعادة</button>
+    <button class="run-btn"   onclick="runSim()">▶ تشغيل</button>
+  </div>
+
+  <!-- simulation canvas -->
+  <canvas id="mom-canvas" width="1060" height="200"></canvas>
+
+  <!-- object controls -->
+  <div class="objects-row">
+
+    <div class="obj-card A">
+      <div class="obj-title">
+        <div class="obj-dot" style="background:#60a5fa"></div>
+        الجسم A
+      </div>
+      <div class="slider-block">
+        <div class="sl-row">
+          <span class="sl-lbl">الكتلة (kg)</span>
+          <input class="sl-inp" type="range" id="sl-mA" min="1" max="20" step="1" value="5" oninput="updateSliders()"/>
+          <span class="sl-num" id="vl-mA">5 kg</span>
+        </div>
+        <div class="sl-row">
+          <span class="sl-lbl">السرعة (m/s)</span>
+          <input class="sl-inp" type="range" id="sl-vA" min="-15" max="15" step="1" value="8" oninput="updateSliders()"/>
+          <span class="sl-num" id="vl-vA">8 m/s</span>
+        </div>
+      </div>
+      <div class="momentum-display">
+        <span class="mom-label">كمية التحرك p = mv</span>
+        <span class="mom-val" id="pA-val" style="color:#60a5fa">40 kg·m/s</span>
+      </div>
+    </div>
+
+    <div class="obj-card B">
+      <div class="obj-title">
+        <div class="obj-dot" style="background:#fb923c"></div>
+        الجسم B
+      </div>
+      <div class="slider-block">
+        <div class="sl-row">
+          <span class="sl-lbl">الكتلة (kg)</span>
+          <input class="sl-inp" type="range" id="sl-mB" min="1" max="20" step="1" value="8" oninput="updateSliders()"/>
+          <span class="sl-num" id="vl-mB">8 kg</span>
+        </div>
+        <div class="sl-row">
+          <span class="sl-lbl">السرعة (m/s)</span>
+          <input class="sl-inp" type="range" id="sl-vB" min="-15" max="15" step="1" value="-3" oninput="updateSliders()"/>
+          <span class="sl-num" id="vl-vB">-3 m/s</span>
+        </div>
+      </div>
+      <div class="momentum-display">
+        <span class="mom-label">كمية التحرك p = mv</span>
+        <span class="mom-val" id="pB-val" style="color:#fb923c">-24 kg·m/s</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- conservation display -->
+  <div class="conservation-card">
+    <div class="cons-title">⚖️ قانون حفظ كمية التحرك</div>
+
+    <div class="cons-row">
+      <div class="cons-before">
+        <div class="cons-block a-block">
+          <div class="cons-lbl">pA قبل</div>
+          <div class="cons-num" id="pA-before" style="color:#60a5fa">40</div>
+          <div class="cons-bar-wrap"><div class="cons-bar-fill" id="bar-pA-before" style="background:#60a5fa;width:60%"></div></div>
+        </div>
+        <span class="cons-plus">+</span>
+        <div class="cons-block b-block">
+          <div class="cons-lbl">pB قبل</div>
+          <div class="cons-num" id="pB-before" style="color:#fb923c">-24</div>
+          <div class="cons-bar-wrap"><div class="cons-bar-fill" id="bar-pB-before" style="background:#fb923c;width:36%"></div></div>
+        </div>
+        <span class="cons-plus">=</span>
+        <div class="cons-block total-block">
+          <div class="cons-lbl">المجموع</div>
+          <div class="cons-num" id="p-total-before" style="color:#fff">16</div>
+          <div class="cons-bar-wrap"><div class="cons-bar-fill" id="bar-total-before" style="background:#fff;width:24%"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cons-separator" id="cons-sep">▼ بعد التصادم ▼</div>
+
+    <div class="cons-row" id="after-row" style="opacity:.35">
+      <div class="cons-before">
+        <div class="cons-block a-block">
+          <div class="cons-lbl">pA بعد</div>
+          <div class="cons-num" id="pA-after" style="color:#60a5fa">—</div>
+          <div class="cons-bar-wrap"><div class="cons-bar-fill" id="bar-pA-after" style="background:#60a5fa;width:0%"></div></div>
+        </div>
+        <span class="cons-plus">+</span>
+        <div class="cons-block b-block">
+          <div class="cons-lbl">pB بعد</div>
+          <div class="cons-num" id="pB-after" style="color:#fb923c">—</div>
+          <div class="cons-bar-wrap"><div class="cons-bar-fill" id="bar-pB-after" style="background:#fb923c;width:0%"></div></div>
+        </div>
+        <span class="cons-plus">=</span>
+        <div class="cons-block total-block">
+          <div class="cons-lbl">المجموع</div>
+          <div class="cons-num" id="p-total-after" style="color:#fff">—</div>
+          <div class="cons-bar-wrap"><div class="cons-bar-fill" id="bar-total-after" style="background:#fff;width:0%"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div class="law-badge" id="law-badge">⚖️ قانون الحفظ يُطبَّق — p_قبل = p_بعد</div>
+      <div id="ke-info" style="font-size:.8rem;color:var(--dim)"></div>
+    </div>
+  </div>
+
+  <!-- info cards -->
+  <div class="info-row">
+    <div class="info-card" style="border-color:#60a5fa">
+      <strong>كمية التحرك p</strong>
+      حاصل ضرب كتلة الجسم في سرعته. كمية اتجاهية — للإشارة أهمية.
+      <div class="formula-box" style="color:#60a5fa">p = m × v</div>
+    </div>
+    <div class="info-card" style="border-color:#34d399">
+      <strong>قانون حفظ كمية التحرك</strong>
+      مجموع كمية التحرك في نظام معزول يبقى ثابتاً قبل وبعد التصادم.
+      <div class="formula-box" style="color:#34d399">p₁ + p₂ = p₁' + p₂'</div>
+    </div>
+    <div class="info-card" style="border-color:#fb923c">
+      <strong>أنواع التصادم</strong>
+      <b style="color:#60a5fa">مرن تام:</b> تُحفظ الطاقة الحركية<br/>
+      <b style="color:#fbbf24">غير مرن:</b> تُفقد بعض الطاقة<br/>
+      <b style="color:#fb923c">لاصق تام:</b> يتحد الجسمان
+    </div>
+    <div class="info-card" style="border-color:#a78bfa">
+      <strong>الطاقة الحركية KE</strong>
+      في التصادم المرن التام تُحفظ الطاقة الحركية أيضاً، أما في غيره فتتحول لحرارة وصوت.
+      <div class="formula-box" style="color:#a78bfa">KE = ½ m v²</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+'use strict';
+
+var cv = document.getElementById('mom-canvas');
+var ctx = cv.getContext('2d');
+var W = 1060, H = 200;
+var collType = 'elastic';
+var animId = null, running = false, collided = false;
+var SCALE = 30; // pixels per meter (display)
+var TRACK_Y = 130;
+var BALL_R = 28;
+
+// state
+var mA, vA, mB, vB;
+var xA, xB;     // display positions
+var vA_post, vB_post;
+
+function getInputs(){
+  mA = parseFloat(document.getElementById('sl-mA').value);
+  vA = parseFloat(document.getElementById('sl-vA').value);
+  mB = parseFloat(document.getElementById('sl-mB').value);
+  vB = parseFloat(document.getElementById('sl-vB').value);
+}
+
+function ballRadius(m){ return Math.max(18, Math.min(42, 14 + m * 1.4)); }
+
+function computeAfter(){
+  if(collType === 'elastic'){
+    vA_post = ((mA - mB)*vA + 2*mB*vB) / (mA + mB);
+    vB_post = ((mB - mA)*vB + 2*mA*vA) / (mA + mB);
+  } else if(collType === 'perfect'){
+    var vf = (mA*vA + mB*vB) / (mA + mB);
+    vA_post = vf; vB_post = vf;
+  } else { // inelastic — partial energy loss (e = 0.5)
+    var e = 0.5;
+    vA_post = (mA*vA + mB*vB + mB*e*(vB - vA)) / (mA + mB);
+    vB_post = (mA*vA + mB*vB + mA*e*(vA - vB)) / (mA + mB);
+  }
+}
+
+function initPositions(){
+  getInputs();
+  var rA = ballRadius(mA), rB = ballRadius(mB);
+  xA = W * 0.28;
+  xB = W * 0.72;
+}
+
+function updateSliders(){
+  getInputs();
+  document.getElementById('vl-mA').textContent = mA + ' kg';
+  document.getElementById('vl-vA').textContent = vA + ' m/s';
+  document.getElementById('vl-mB').textContent = mB + ' kg';
+  document.getElementById('vl-vB').textContent = vB + ' m/s';
+  document.getElementById('pA-val').textContent = (mA*vA).toFixed(1) + ' kg·m/s';
+  document.getElementById('pB-val').textContent = (mB*vB).toFixed(1) + ' kg·m/s';
+  updateConservationBefore();
+  if(!running) drawStatic();
+}
+
+function updateConservationBefore(){
+  var pA = mA * vA, pB = mB * vB, tot = pA + pB;
+  var MAX = 300;
+  document.getElementById('pA-before').textContent = pA.toFixed(1);
+  document.getElementById('pB-before').textContent = pB.toFixed(1);
+  document.getElementById('p-total-before').textContent = tot.toFixed(1);
+  document.getElementById('bar-pA-before').style.width = Math.min(100, Math.abs(pA)/MAX*100) + '%';
+  document.getElementById('bar-pB-before').style.width = Math.min(100, Math.abs(pB)/MAX*100) + '%';
+  document.getElementById('bar-total-before').style.width = Math.min(100, Math.abs(tot)/MAX*100) + '%';
+  document.getElementById('after-row').style.opacity = '0.3';
+  document.getElementById('pA-after').textContent = '—';
+  document.getElementById('pB-after').textContent = '—';
+  document.getElementById('p-total-after').textContent = '—';
+  document.getElementById('bar-pA-after').style.width = '0%';
+  document.getElementById('bar-pB-after').style.width = '0%';
+  document.getElementById('bar-total-after').style.width = '0%';
+  document.getElementById('ke-info').textContent = '';
+}
+
+function showAfterData(){
+  var pAa = mA * vA_post, pBa = mB * vB_post, tota = pAa + pBa;
+  var MAX = 300;
+  document.getElementById('after-row').style.opacity = '1';
+  document.getElementById('pA-after').textContent = pAa.toFixed(1);
+  document.getElementById('pB-after').textContent = pBa.toFixed(1);
+  document.getElementById('p-total-after').textContent = tota.toFixed(1);
+  document.getElementById('bar-pA-after').style.width = Math.min(100, Math.abs(pAa)/MAX*100) + '%';
+  document.getElementById('bar-pB-after').style.width = Math.min(100, Math.abs(pBa)/MAX*100) + '%';
+  document.getElementById('bar-total-after').style.width = Math.min(100, Math.abs(tota)/MAX*100) + '%';
+  // KE
+  var keBefore = 0.5*mA*vA*vA + 0.5*mB*vB*vB;
+  var keAfter  = 0.5*mA*vA_post*vA_post + 0.5*mB*vB_post*vB_post;
+  var keLoss   = keBefore - keAfter;
+  var badge = document.getElementById('law-badge');
+  badge.className = 'law-badge';
+  badge.textContent = '⚖️ قانون الحفظ مُطبَّق — p_قبل = p_بعد = ' + (mA*vA+mB*vB).toFixed(1) + ' kg·m/s';
+  var keStr = 'KE قبل: ' + keBefore.toFixed(1) + ' J | KE بعد: ' + keAfter.toFixed(1) + ' J';
+  if(Math.abs(keLoss) < 0.1) keStr += ' | تصادم مرن تام ✓';
+  else keStr += ' | طاقة مفقودة: ' + keLoss.toFixed(1) + ' J (تحولت لحرارة وصوت)';
+  document.getElementById('ke-info').textContent = keStr;
+}
+
+/* ── drawing ── */
+function drawScene(xA, xB, curVA, curVB, phase){
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#060a18';
+  ctx.fillRect(0, 0, W, H);
+
+  // track
+  var trackGrad = ctx.createLinearGradient(0, TRACK_Y+2, 0, TRACK_Y+10);
+  trackGrad.addColorStop(0, 'rgba(255,255,255,.18)');
+  trackGrad.addColorStop(1, 'rgba(255,255,255,.04)');
+  ctx.fillStyle = trackGrad;
+  ctx.beginPath();
+  ctx.roundRect(40, TRACK_Y + ballRadius(Math.max(mA,mB)) + 2, W - 80, 8, 3);
+  ctx.fill();
+  // track end markers
+  ctx.strokeStyle = 'rgba(255,255,255,.2)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(40, TRACK_Y - 10); ctx.lineTo(40, TRACK_Y + ballRadius(Math.max(mA,mB)) + 12); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W-40, TRACK_Y - 10); ctx.lineTo(W-40, TRACK_Y + ballRadius(Math.max(mA,mB)) + 12); ctx.stroke();
+
+  var rA = ballRadius(mA), rB = ballRadius(mB);
+
+  // velocity arrows
+  drawArrow(xA, TRACK_Y - rA - 6, curVA, '#60a5fa', mA);
+  drawArrow(xB, TRACK_Y - rB - 6, curVB, '#fb923c', mB);
+
+  // if perfect collision, draw combined
+  if(collType === 'perfect' && phase === 'after'){
+    var xMid = (xA + xB) / 2;
+    var rBig = Math.min(55, Math.sqrt(rA*rA + rB*rB) * 0.9);
+    drawBall(xMid, TRACK_Y, rBig, '#a78bfa', 'A+B', mA+mB, curVA);
+  } else {
+    drawBall(xA, TRACK_Y, rA, '#60a5fa', 'A', mA, curVA);
+    drawBall(xB, TRACK_Y, rB, '#fb923c', 'B', mB, curVB);
+  }
+
+  // phase label
+  ctx.fillStyle = 'rgba(255,255,255,.25)';
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'center';
+  var phaseAr = phase === 'before' ? 'قبل التصادم' : phase === 'colliding' ? '💥 تصادم!' : 'بعد التصادم';
+  ctx.fillText(phaseAr, W/2, 18);
+}
+
+function drawBall(x, cy, r, col, label, mass, vel){
+  // glow
+  var glow = ctx.createRadialGradient(x, cy, 0, x, cy, r * 1.8);
+  glow.addColorStop(0, col.replace(')', ', .18)').replace('rgb', 'rgba'));
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.beginPath(); ctx.arc(x, cy, r * 1.8, 0, Math.PI*2);
+  ctx.fillStyle = glow; ctx.fill();
+  // main ball
+  var g = ctx.createRadialGradient(x - r*.3, cy - r*.3, 0, x, cy, r);
+  var lighterCol = col;
+  g.addColorStop(0, lighterCol + 'dd');
+  g.addColorStop(0.5, lighterCol + 'aa');
+  g.addColorStop(1, lighterCol + '44');
+  ctx.beginPath(); ctx.arc(x, cy, r, 0, Math.PI*2);
+  ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
+  // specular
+  var spec = ctx.createRadialGradient(x - r*.32, cy - r*.32, 0, x - r*.28, cy - r*.28, r*.5);
+  spec.addColorStop(0, 'rgba(255,255,255,.6)');
+  spec.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.beginPath(); ctx.arc(x, cy, r, 0, Math.PI*2);
+  ctx.fillStyle = spec; ctx.fill();
+  // label
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold ' + Math.max(9, r*.5) + 'px sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(label, x, cy - 3);
+  ctx.font = Math.max(8, r*.4) + 'px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,.7)';
+  ctx.fillText(mass + 'kg', x, cy + r*.38);
+  ctx.textBaseline = 'alphabetic';
+}
+
+function drawArrow(x, y, vel, col, mass){
+  if(Math.abs(vel) < 0.01) return;
+  var len = Math.min(120, Math.abs(vel) * 6);
+  var dir = vel > 0 ? -1 : 1; // RTL canvas: positive = left, negative = right
+  // in our LTR canvas: positive vel = rightward
+  dir = vel > 0 ? 1 : -1;
+  var ex = x + dir * len;
+  ctx.strokeStyle = col; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, y); ctx.stroke();
+  // arrowhead
+  ctx.beginPath();
+  ctx.moveTo(ex, y);
+  ctx.lineTo(ex - dir*10, y - 5);
+  ctx.lineTo(ex - dir*10, y + 5);
+  ctx.closePath();
+  ctx.fillStyle = col; ctx.fill();
+  // value label
+  ctx.fillStyle = col; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(vel.toFixed(1) + ' m/s', (x + ex)/2, y - 8);
+}
+
+function drawStatic(){
+  initPositions();
+  drawScene(xA, xB, vA, vB, 'before');
+}
+
+/* ── animation ── */
+var simXA, simXB, simVA, simVB, simPhase, simFrames;
+var FPS = 60, DT = 1/FPS, SIM_SCALE = 28;
+
+function runSim(){
+  if(running) return;
+  getInputs();
+  // check they'll collide
+  if((xA < xB && vA <= vB) || (xA > xB && vA >= vB)){
+    alert('الجسمان لن يتصادما بهذه السرعات!'); return;
+  }
+  computeAfter();
+  collided = false;
+  running = true;
+  simXA = W * 0.28;
+  simXB = W * 0.72;
+  simVA = vA * SIM_SCALE;
+  simVB = vB * SIM_SCALE;
+  simPhase = 'before';
+  document.getElementById('run-btn') && null;
+  animate();
+}
+
+function animate(){
+  var rA = ballRadius(mA), rB = ballRadius(mB);
+  simXA += simVA * DT * 1.2;
+  simXB += simVB * DT * 1.2;
+
+  if(!collided && simXA + rA >= simXB - rB){
+    collided = true;
+    simPhase = 'colliding';
+    var vA_p = vA_post * SIM_SCALE;
+    var vB_p = vB_post * SIM_SCALE;
+    // flash frame
+    drawScene(simXA, simXB, vA_post, vB_post, 'colliding');
+    showAfterData();
+    setTimeout(function(){
+      simVA = vA_p; simVB = vB_p;
+      simPhase = 'after';
+      animId = requestAnimationFrame(tick);
+    }, 180);
+    return;
+  }
+
+  // bounds check
+  if(simXA - rA < 40){ simXA = 40 + rA; simVA = Math.abs(simVA); }
+  if(simXB + rB > W - 40){ simXB = W - 40 - rB; simVB = -Math.abs(simVB); }
+
+  var curVA = simPhase === 'after' ? vA_post : vA;
+  var curVB = simPhase === 'after' ? vB_post : vB;
+  drawScene(simXA, simXB, curVA, curVB, simPhase);
+
+  if(simPhase === 'after'){
+    // stop when both off screen or stopped
+    var offA = simXA < -100 || simXA > W + 100;
+    var offB = simXB < -100 || simXB > W + 100;
+    var stopped = Math.abs(simVA) < 0.3 && Math.abs(simVB) < 0.3;
+    if(offA && offB || stopped){ running = false; return; }
+  }
+  animId = requestAnimationFrame(animate);
+}
+
+function tick(){ if(running) animate(); }
+
+function resetSim(){
+  running = false; collided = false;
+  if(animId) cancelAnimationFrame(animId);
+  initPositions();
+  updateSliders();
+  drawStatic();
+}
+
+function setCollision(t){
+  collType = t;
+  ['elastic','inelastic','perfect'].forEach(function(x){
+    document.getElementById('ct-'+x).classList.toggle('active', x === t);
+  });
+  resetSim();
+}
+
+window.setCollision = setCollision;
+window.runSim = runSim;
+window.resetSim = resetSim;
+window.updateSliders = updateSliders;
+
+// init
+initPositions();
+updateSliders();
+drawStatic();
+})();
+</script>
+</body>
+</html>

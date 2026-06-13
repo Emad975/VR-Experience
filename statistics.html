@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>الإحصاء — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<style>
+body{overflow-x:hidden}
+.st-wrap{max-width:1000px;margin:0 auto;padding:16px 16px 60px;display:flex;gap:18px;flex-wrap:wrap}
+.st-left{flex:0 0 300px;display:flex;flex-direction:column;gap:12px}
+.st-right{flex:1;min-width:280px;display:flex;flex-direction:column;gap:14px}
+.inp-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px}
+.inp-card label{display:block;font-size:.75rem;color:var(--dim);font-weight:700;margin-bottom:6px}
+.nums-inp{width:100%;padding:10px 12px;background:rgba(0,0,0,.3);border:1.5px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-family:inherit;font-size:.95rem;outline:none;resize:vertical;min-height:80px}
+.nums-inp:focus{border-color:#60a5fa}
+.presets-wrap{display:flex;flex-direction:column;gap:5px}
+.pre-row{display:flex;gap:5px;align-items:center}
+.pre-label{font-size:.72rem;color:var(--dim);width:80px;flex-shrink:0}
+.pre-btn2{flex:1;padding:6px 4px;border-radius:6px;border:1.5px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:var(--text);font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer;transition:all .15s;text-align:center}
+.pre-btn2:hover{border-color:#60a5fa;color:#60a5fa}
+.calc-btn{width:100%;padding:12px;border-radius:10px;border:none;font-family:inherit;font-size:.95rem;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;transition:opacity .18s}
+.calc-btn:hover{opacity:.88}
+#st-canvas{background:#060a18;border-radius:14px;border:1.5px solid rgba(255,255,255,.1);display:block;width:100%}
+.results-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.res-box{background:rgba(255,255,255,.04);border-radius:10px;border:2px solid rgba(255,255,255,.08);padding:12px;text-align:center;transition:border-color .2s}
+.res-box.highlight{border-color:var(--hcol,#60a5fa)}
+.res-box-label{font-size:.7rem;color:var(--dim);margin-bottom:4px;font-weight:700}
+.res-box-val{font-size:1.3rem;font-weight:900}
+.steps-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px}
+.steps-title{font-size:.75rem;color:var(--dim);font-weight:700;margin-bottom:10px}
+.step-item{padding:8px 12px;border-radius:8px;background:rgba(0,0,0,.2);margin-bottom:6px;font-size:.83rem;color:var(--dim);line-height:1.55}
+.step-item strong{color:var(--text)}
+@media(max-width:700px){.st-left{flex:0 0 100%}.results-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<header class="portal-header">
+  <a href="math.html" class="portal-header-back">← رجوع</a>
+  <a href="statistics-3d.html" class="portal-header-back" style="border-color:rgba(126,150,250,.45);color:#a5b8fc">🥽 النسخة الغامرة 3D</a>
+  <img src="images/logos/logo.png" alt="EDAMA" class="portal-logo-img"/>
+  <div class="portal-logo-wrap">
+    <div class="portal-logo">EDAMA <span>Virtual Technology</span></div>
+    <div class="portal-tagline">رياضيات — الإحصاء الوصفي</div>
+  </div>
+</header>
+<div class="st-wrap">
+  <div class="st-left">
+    <div class="inp-card">
+      <label>أدخل الأرقام (مفصولة بفاصلة)</label>
+      <textarea class="nums-inp" id="nums-inp" placeholder="مثال: 5, 3, 8, 3, 9, 1, 7, 3">4, 7, 2, 9, 4, 1, 8, 4, 6, 3</textarea>
+    </div>
+    <div class="inp-card">
+      <div style="font-size:.75rem;color:var(--dim);font-weight:700;margin-bottom:8px">أمثلة جاهزة</div>
+      <div class="presets-wrap">
+        <div class="pre-row">
+          <span class="pre-label">متماثل</span>
+          <button class="pre-btn2" onclick="setPre('2,4,4,4,5,5,7,9')">2,4,4,4,5,5,7,9</button>
+        </div>
+        <div class="pre-row">
+          <span class="pre-label">متفرق</span>
+          <button class="pre-btn2" onclick="setPre('1,5,5,5,8,20,50')">1,5,5,5,8,20,50</button>
+        </div>
+        <div class="pre-row">
+          <span class="pre-label">درجات</span>
+          <button class="pre-btn2" onclick="setPre('60,70,75,80,80,85,90,95,100')">درجات الصف</button>
+        </div>
+        <div class="pre-row">
+          <span class="pre-label">منتظم</span>
+          <button class="pre-btn2" onclick="setPre('10,20,30,40,50')">10,20,30,40,50</button>
+        </div>
+      </div>
+    </div>
+    <button class="calc-btn" onclick="calc()">📊 احسب وارسم</button>
+  </div>
+  <div class="st-right">
+    <div class="results-grid" id="results-grid"></div>
+    <canvas id="st-canvas" width="580" height="220"></canvas>
+    <div class="steps-card">
+      <div class="steps-title">📋 شرح تفصيلي</div>
+      <div id="steps-content"></div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+var cv=document.getElementById('st-canvas'),ctx=cv.getContext('2d');
+var W=580,H=220;
+
+function setPre(v){document.getElementById('nums-inp').value=v;calc();}
+
+function calc(){
+  var raw=document.getElementById('nums-inp').value;
+  var nums=raw.split(/[,،\s]+/).map(parseFloat).filter(function(n){return!isNaN(n);});
+  if(nums.length<2)return;
+  var sorted=nums.slice().sort(function(a,b){return a-b;});
+  var n=nums.length;
+  // mean
+  var mean=nums.reduce(function(a,b){return a+b;},0)/n;
+  // median
+  var med=n%2===0?(sorted[n/2-1]+sorted[n/2])/2:sorted[Math.floor(n/2)];
+  // mode
+  var freq={};nums.forEach(function(x){freq[x]=(freq[x]||0)+1;});
+  var maxF=Math.max.apply(null,Object.values(freq));
+  var modes=Object.keys(freq).filter(function(k){return freq[k]===maxF;}).map(Number);
+  var modeStr=maxF===1?'لا يوجد':modes.join(', ');
+  // range
+  var range=sorted[n-1]-sorted[0];
+  // variance & std
+  var vari=nums.reduce(function(s,x){return s+Math.pow(x-mean,2);},0)/n;
+  var std=Math.sqrt(vari);
+  // display
+  var rg=document.getElementById('results-grid');
+  var items=[
+    {label:'المتوسط',val:mean.toFixed(2),col:'#60a5fa'},
+    {label:'الوسيط',val:med.toFixed(2),col:'#34d399'},
+    {label:'المنوال',val:modeStr,col:'#f472b6'},
+    {label:'المدى',val:range.toFixed(2),col:'#fb923c'},
+    {label:'التباين',val:vari.toFixed(2),col:'#a78bfa'},
+    {label:'الانحراف المعياري',val:std.toFixed(2),col:'#fbbf24'}
+  ];
+  rg.innerHTML=items.map(function(it){
+    return'<div class="res-box highlight" style="--hcol:'+it.col+'"><div class="res-box-label">'+it.label+'</div><div class="res-box-val" style="color:'+it.col+'">'+it.val+'</div></div>';
+  }).join('');
+  // steps
+  var sc=document.getElementById('steps-content');
+  var sortedStr=sorted.join(', ');
+  sc.innerHTML=[
+    '<div class="step-item"><strong>البيانات المرتبة:</strong> '+sortedStr+'</div>',
+    '<div class="step-item"><strong>المتوسط الحسابي:</strong> مجموع الأرقام ÷ عددها = '+nums.reduce(function(a,b){return a+b;},0).toFixed(1)+' ÷ '+n+' = <span style="color:#60a5fa;font-weight:900">'+mean.toFixed(3)+'</span></div>',
+    '<div class="step-item"><strong>الوسيط:</strong> القيمة الوسطى بعد الترتيب = <span style="color:#34d399;font-weight:900">'+med+'</span></div>',
+    '<div class="step-item"><strong>المنوال:</strong> الأكثر تكراراً ('+maxF+' مرات) = <span style="color:#f472b6;font-weight:900">'+modeStr+'</span></div>',
+    '<div class="step-item"><strong>المدى:</strong> أكبر قيمة − أصغر قيمة = '+sorted[n-1]+' − '+sorted[0]+' = <span style="color:#fb923c;font-weight:900">'+range+'</span></div>',
+    '<div class="step-item"><strong>الانحراف المعياري:</strong> يقيس مدى تشتت البيانات عن المتوسط = <span style="color:#fbbf24;font-weight:900">'+std.toFixed(3)+'</span></div>'
+  ].join('');
+  drawChart(sorted,mean,med,modes[0]);
+}
+
+function drawChart(sorted,mean,med,mode){
+  ctx.clearRect(0,0,W,H);ctx.fillStyle='#060a18';ctx.fillRect(0,0,W,H);
+  var pad={t:30,r:20,b:35,l:30};
+  var cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
+  var mn=sorted[0],mx=sorted[sorted.length-1],rng=mx-mn||1;
+  function tx(v){return pad.l+(v-mn)/rng*cw;}
+  // grid line
+  ctx.strokeStyle='rgba(255,255,255,.1)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(pad.l,H-pad.b);ctx.lineTo(W-pad.r,H-pad.b);ctx.stroke();
+  // frequency
+  var freq={};sorted.forEach(function(x){freq[x]=(freq[x]||0)+1;});
+  var maxF=Math.max.apply(null,Object.values(freq));
+  // bars
+  Object.keys(freq).sort(function(a,b){return a-b;}).forEach(function(k){
+    var kn=parseFloat(k);
+    var bw=Math.max(8,cw/((mx-mn||1)*2+2)*0.8);
+    var bh=(freq[k]/maxF)*ch;
+    var bx=tx(kn)-bw/2;
+    var col=kn===mean?'#60a5fa':kn===med?'#34d399':kn===mode?'#f472b6':'rgba(255,255,255,.18)';
+    ctx.fillStyle=col;
+    ctx.beginPath();if(ctx.roundRect)ctx.roundRect(bx,H-pad.b-bh,bw,bh,3);else ctx.rect(bx,H-pad.b-bh,bw,bh);
+    ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.4)';ctx.font='9px sans-serif';ctx.textAlign='center';
+    ctx.fillText(kn,tx(kn),H-pad.b+12);
+    if(freq[k]>1)ctx.fillText('×'+freq[k],tx(kn),H-pad.b-bh-4);
+  });
+  // mean line
+  ctx.strokeStyle='#60a5fa';ctx.lineWidth=2;ctx.setLineDash([5,4]);
+  ctx.beginPath();ctx.moveTo(tx(mean),pad.t);ctx.lineTo(tx(mean),H-pad.b);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#60a5fa';ctx.font='bold 10px sans-serif';ctx.textAlign='center';
+  ctx.fillText('متوسط',tx(mean),pad.t-5);
+  // median line
+  if(Math.abs(med-mean)>rng*0.02){
+    ctx.strokeStyle='#34d399';ctx.lineWidth=2;ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.moveTo(tx(med),pad.t+10);ctx.lineTo(tx(med),H-pad.b);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#34d399';ctx.fillText('وسيط',tx(med),pad.t+8);
+  }
+}
+
+window.setPre=setPre;window.calc=calc;
+calc();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>الرسم البياني — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<style>
+body{overflow-x:hidden}
+.fg-wrap{max-width:1100px;margin:0 auto;padding:16px 16px 60px;display:flex;gap:18px;flex-wrap:wrap}
+.fg-sidebar{flex:0 0 280px;display:flex;flex-direction:column;gap:12px}
+.fg-main{flex:1;min-width:300px}
+#fg-canvas{background:#060a18;border-radius:14px;border:1.5px solid rgba(255,255,255,.1);display:block;width:100%;cursor:crosshair}
+.input-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px}
+.input-card label{display:block;font-size:.75rem;color:var(--dim);font-weight:700;margin-bottom:6px}
+.fn-input{
+  width:100%;padding:10px 12px;background:rgba(0,0,0,.3);
+  border:1.5px solid rgba(255,255,255,.15);border-radius:8px;
+  color:#fff;font-family:inherit;font-size:1rem;outline:none;
+}
+.fn-input:focus{border-color:#60a5fa}
+.fn-error{color:#ef4444;font-size:.78rem;margin-top:4px;min-height:16px}
+.presets-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.pr-btn{
+  padding:8px 6px;border-radius:8px;
+  border:1.5px solid rgba(255,255,255,.1);
+  background:rgba(255,255,255,.04);
+  color:var(--text);font-family:inherit;font-size:.82rem;font-weight:700;
+  cursor:pointer;transition:all .15s;text-align:center;
+}
+.pr-btn:hover{border-color:#60a5fa;color:#60a5fa}
+.zoom-row{display:flex;gap:8px;align-items:center}
+.zm-btn{flex:1;padding:8px;border-radius:8px;border:1.5px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:var(--text);font-family:inherit;font-size:1rem;font-weight:900;cursor:pointer;transition:all .15s}
+.zm-btn:hover{border-color:#60a5fa;color:#60a5fa}
+.zm-label{font-size:.75rem;color:var(--dim);text-align:center;flex:1}
+.info-row{display:flex;gap:8px;flex-wrap:wrap}
+.info-chip{padding:6px 12px;border-radius:8px;background:rgba(255,255,255,.05);font-size:.8rem;color:var(--dim);border:1px solid rgba(255,255,255,.08)}
+.info-chip span{color:#60a5fa;font-weight:700}
+@media(max-width:700px){.fg-sidebar{flex:0 0 100%}}
+</style>
+</head>
+<body>
+<header class="portal-header">
+  <a href="math.html" class="portal-header-back">← رجوع</a>
+  <a href="function-3d.html" class="portal-header-back" style="border-color:rgba(126,150,250,.45);color:#a5b8fc">🥽 النسخة الغامرة 3D</a>
+  <img src="images/logos/logo.png" alt="EDAMA" class="portal-logo-img"/>
+  <div class="portal-logo-wrap">
+    <div class="portal-logo">EDAMA <span>Virtual Technology</span></div>
+    <div class="portal-tagline">رياضيات — الرسم البياني التفاعلي</div>
+  </div>
+</header>
+<div class="fg-wrap">
+  <div class="fg-sidebar">
+    <div class="input-card">
+      <label>f(x) = </label>
+      <input class="fn-input" id="fn-inp" value="x^2" placeholder="مثال: x^2 + 2*x - 3" oninput="drawGraph()"/>
+      <div class="fn-error" id="fn-err"></div>
+    </div>
+    <div class="input-card">
+      <label>دوال جاهزة</label>
+      <div class="presets-grid">
+        <button class="pr-btn" onclick="setFn('x^2')">x²</button>
+        <button class="pr-btn" onclick="setFn('x^3')">x³</button>
+        <button class="pr-btn" onclick="setFn('sqrt(x)')">√x</button>
+        <button class="pr-btn" onclick="setFn('abs(x)')">|x|</button>
+        <button class="pr-btn" onclick="setFn('sin(x)')">sin(x)</button>
+        <button class="pr-btn" onclick="setFn('cos(x)')">cos(x)</button>
+        <button class="pr-btn" onclick="setFn('tan(x)')">tan(x)</button>
+        <button class="pr-btn" onclick="setFn('1/x')">1/x</button>
+        <button class="pr-btn" onclick="setFn('x^2-4')">x²-4</button>
+        <button class="pr-btn" onclick="setFn('2*x+1')">2x+1</button>
+        <button class="pr-btn" onclick="setFn('exp(x)')">eˣ</button>
+        <button class="pr-btn" onclick="setFn('log(x)')">ln(x)</button>
+      </div>
+    </div>
+    <div class="input-card">
+      <label>تكبير / تصغير</label>
+      <div class="zoom-row">
+        <button class="zm-btn" onclick="zoom(1.4)">−</button>
+        <span class="zm-label" id="zm-lbl">نطاق ±10</span>
+        <button class="zm-btn" onclick="zoom(0.7)">+</button>
+      </div>
+    </div>
+    <div class="input-card">
+      <label>💡 كيفية الكتابة</label>
+      <div style="font-size:.78rem;color:var(--dim);line-height:1.8">
+        <b style="color:var(--text)">^</b> للأس: x^2<br/>
+        <b style="color:var(--text)">*</b> للضرب: 2*x<br/>
+        <b style="color:var(--text)">sqrt(x)</b> جذر<br/>
+        <b style="color:var(--text)">abs(x)</b> قيمة مطلقة<br/>
+        <b style="color:var(--text)">sin / cos / tan</b><br/>
+        <b style="color:var(--text)">pi</b> = 3.14159 | <b style="color:var(--text)">e</b>
+      </div>
+    </div>
+  </div>
+  <div class="fg-main">
+    <canvas id="fg-canvas" width="700" height="500"></canvas>
+    <div class="info-row" style="margin-top:10px" id="info-row"></div>
+  </div>
+</div>
+<script>
+(function(){
+var cv=document.getElementById('fg-canvas'),ctx=cv.getContext('2d');
+var W=700,H=500;
+var xRange=10,yRange=10;
+
+function setFn(f){document.getElementById('fn-inp').value=f;drawGraph();}
+function zoom(f){xRange*=f;yRange*=f;document.getElementById('zm-lbl').textContent='نطاق ±'+Math.round(xRange);drawGraph();}
+
+function parseFn(expr){
+  var s=expr.trim()
+    .replace(/\^/g,'**')
+    .replace(/sqrt/g,'Math.sqrt')
+    .replace(/abs/g,'Math.abs')
+    .replace(/sin/g,'Math.sin')
+    .replace(/cos/g,'Math.cos')
+    .replace(/tan/g,'Math.tan')
+    .replace(/exp/g,'Math.exp')
+    .replace(/log/g,'Math.log')
+    .replace(/pi/g,'Math.PI')
+    .replace(/(?<![a-zA-Z])e(?![a-zA-Z])/g,'Math.E');
+  return new Function('x','return '+s+';');
+}
+
+function drawGraph(){
+  var expr=document.getElementById('fn-inp').value;
+  var err=document.getElementById('fn-err');
+  err.textContent='';
+  var fn;
+  try{fn=parseFn(expr);}catch(e){err.textContent='خطأ في الصيغة';return;}
+  // test
+  try{var t=fn(1);if(typeof t!=='number')throw new Error();}catch(e){err.textContent='تعبير غير صالح';return;}
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#060a18';ctx.fillRect(0,0,W,H);
+  var pad=40;
+  var pw=W-2*pad,ph=H-2*pad;
+  function tx(x){return pad+(x+xRange)/(2*xRange)*pw;}
+  function ty(y){return H-pad-(y+yRange)/(2*yRange)*ph;}
+
+  // grid
+  var step=xRange<=2?0.5:xRange<=5?1:xRange<=15?2:5;
+  ctx.strokeStyle='rgba(255,255,255,.06)';ctx.lineWidth=1;
+  for(var gx=-xRange;gx<=xRange;gx+=step){ctx.beginPath();ctx.moveTo(tx(gx),pad);ctx.lineTo(tx(gx),H-pad);ctx.stroke();}
+  for(var gy=-yRange;gy<=yRange;gy+=step){ctx.beginPath();ctx.moveTo(pad,ty(gy));ctx.lineTo(W-pad,ty(gy));ctx.stroke();}
+
+  // axes
+  ctx.strokeStyle='rgba(255,255,255,.3)';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(pad,ty(0));ctx.lineTo(W-pad,ty(0));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(tx(0),pad);ctx.lineTo(tx(0),H-pad);ctx.stroke();
+
+  // axis labels
+  ctx.fillStyle='rgba(255,255,255,.35)';ctx.font='10px sans-serif';ctx.textAlign='center';
+  for(var lx=-xRange+step;lx<=xRange-step/2;lx+=step){
+    if(Math.abs(lx)<0.01)continue;
+    ctx.fillText(Math.round(lx*100)/100,tx(lx),ty(0)+14);
+  }
+  ctx.textAlign='right';
+  for(var ly=-yRange+step;ly<=yRange-step/2;ly+=step){
+    if(Math.abs(ly)<0.01)continue;
+    ctx.fillText(Math.round(ly*100)/100,tx(0)-4,ty(ly)+3);
+  }
+  // axis arrows & labels
+  ctx.fillStyle='rgba(255,255,255,.4)';ctx.font='bold 12px sans-serif';
+  ctx.textAlign='center';ctx.fillText('x',W-pad+14,ty(0)+4);
+  ctx.fillText('y',tx(0),pad-8);
+
+  // curve
+  ctx.beginPath();
+  var first=true,prevY=null;
+  var steps=pw*2;
+  for(var i=0;i<=steps;i++){
+    var xi=-xRange+i*(2*xRange)/steps;
+    var yi;
+    try{yi=fn(xi);}catch(e){first=true;prevY=null;continue;}
+    if(!isFinite(yi)||isNaN(yi)){first=true;prevY=null;continue;}
+    if(prevY!==null&&Math.abs(yi-prevY)>yRange*4){first=true;prevY=null;}
+    var sx2=tx(xi),sy2=ty(yi);
+    if(sy2<pad-10||sy2>H-pad+10){first=true;prevY=null;continue;}
+    if(first){ctx.moveTo(sx2,sy2);first=false;}else ctx.lineTo(sx2,sy2);
+    prevY=yi;
+  }
+  ctx.strokeStyle='#60a5fa';ctx.lineWidth=2.5;ctx.stroke();
+
+  // y-intercept
+  try{
+    var y0=fn(0);
+    if(isFinite(y0)&&Math.abs(y0)<=yRange){
+      ctx.beginPath();ctx.arc(tx(0),ty(y0),5,0,Math.PI*2);
+      ctx.fillStyle='#fbbf24';ctx.fill();
+      ctx.fillStyle='rgba(255,191,36,.7)';ctx.font='10px sans-serif';ctx.textAlign='left';
+      ctx.fillText('(0, '+Math.round(y0*100)/100+')',tx(0)+8,ty(y0)-5);
+    }
+  }catch(e){}
+
+  // info
+  var info=document.getElementById('info-row');
+  try{
+    var at1=fn(1),atm1=fn(-1);
+    info.innerHTML=
+      '<div class="info-chip">f(0) = <span>'+(isFinite(fn(0))?Math.round(fn(0)*100)/100:'—')+'</span></div>'+
+      '<div class="info-chip">f(1) = <span>'+(isFinite(at1)?Math.round(at1*100)/100:'—')+'</span></div>'+
+      '<div class="info-chip">f(-1) = <span>'+(isFinite(atm1)?Math.round(atm1*100)/100:'—')+'</span></div>';
+  }catch(e){info.innerHTML='';}
+}
+
+// resize canvas for device
+function resize(){
+  var cont=cv.parentElement;
+  var nw=cont.clientWidth;
+  if(nw<W){cv.style.height=(nw*H/W)+'px';}
+}
+window.setFn=setFn;window.zoom=zoom;
+drawGraph();
+resize();
+})();
+</script>
+</body>
+</html>

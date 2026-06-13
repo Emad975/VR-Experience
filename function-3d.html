@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<title>أسطح الدوال ثلاثية الأبعاد — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<link rel="stylesheet" href="css/xrlab.css"/>
+<style>
+.fx-input{
+  width:100%;padding:9px 11px;border-radius:10px;
+  background:rgba(0,0,0,.4);border:1.5px solid rgba(255,255,255,.15);
+  color:#e2e8f0;font-family:Consolas,monospace;font-size:.92rem;font-weight:700;
+  direction:ltr;text-align:left;outline:none;
+}
+.fx-input:focus{border-color:#60a5fa}
+.fx-input.err{border-color:#ef4444}
+.fx-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.fx-chip{
+  padding:5px 10px;border-radius:9px;font-size:.7rem;font-weight:700;cursor:pointer;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.13);color:#94a3b8;
+  direction:ltr;transition:all .15s;font-family:Consolas,monospace;
+}
+.fx-chip:hover,.fx-chip.active{border-color:#60a5fa;color:#60a5fa;background:rgba(96,165,250,.12)}
+</style>
+</head>
+<body>
+
+<div id="scene"></div>
+
+<header class="hud-header">
+  <a href="math.html" class="hud-back">← رجوع</a>
+  <div class="hud-title">🏔️ أسطح الدوال <span>ثلاثية الأبعاد</span> — z = f(x, y)</div>
+  <a href="function-graph.html" class="hud-2d">📊 الوضع المبسّط 2D</a>
+</header>
+
+<div class="hint glass" id="hint">🖱️ اسحب للتدوير — جرّب الدوال المتحركة التي تحتوي t</div>
+
+<div class="side-panel">
+  <div class="glass sp-section">
+    <div class="sp-title">الدالة z = f(x, y, t)</div>
+    <input class="fx-input" id="fx" value="sin(x)*cos(y)" spellcheck="false"/>
+    <div class="fx-chips" id="chips"></div>
+  </div>
+
+  <div class="glass sp-section">
+    <div class="sp-title">إعدادات العرض</div>
+    <div class="sp-row">
+      <span class="sp-name">المدى</span>
+      <input class="sp-slider" type="range" id="range" min="3" max="12" step="1" value="6"/>
+      <span class="sp-val" id="range-v">±6</span>
+    </div>
+    <div class="sp-row">
+      <span class="sp-name">الدقة</span>
+      <input class="sp-slider" type="range" id="res" min="30" max="120" step="10" value="80"/>
+      <span class="sp-val" id="res-v">80</span>
+    </div>
+  </div>
+</div>
+
+<div class="ctl-bar glass">
+  <button class="ctl-btn on" id="btn-anim">▶ الحركة (t)</button>
+  <button class="ctl-btn" id="btn-wire">🕸️ شبكة</button>
+  <button class="ctl-btn on" id="btn-spin">🔄 دوران</button>
+</div>
+
+<script src="js/vendor/three.min.js"></script>
+<script src="js/vendor/OrbitControls.js"></script>
+<script src="js/vendor/VRButton.js"></script>
+<script src="js/xrlab.js"></script>
+<script>
+(function(){
+'use strict';
+
+var lab=XRLab.init({cameraPos:[8,6,11],target:[0,1.6,0],maxDistance:60});
+var scene=lab.scene;
+
+/* ── safe formula parser ── */
+var ALLOWED={sin:1,cos:1,tan:1,asin:1,acos:1,atan:1,sqrt:1,abs:1,exp:1,log:1,pow:1,min:1,max:1,floor:1,ceil:1,round:1,sign:1,PI:1,E:1,x:1,y:1,t:1};
+function compile(src){
+  var expr=src.replace(/\^/g,'**');
+  if(/[^0-9a-zA-Z_+\-*/().,\s*]/.test(expr))return null;
+  var ids=expr.match(/[a-zA-Z_]+/g)||[];
+  for(var i=0;i<ids.length;i++)if(!ALLOWED[ids[i]])return null;
+  try{
+    /* eslint-disable no-new-func */
+    var f=new Function('x','y','t',
+      'var sin=Math.sin,cos=Math.cos,tan=Math.tan,asin=Math.asin,acos=Math.acos,atan=Math.atan,'+
+      'sqrt=Math.sqrt,abs=Math.abs,exp=Math.exp,log=Math.log,pow=Math.pow,min=Math.min,max=Math.max,'+
+      'floor=Math.floor,ceil=Math.ceil,round=Math.round,sign=Math.sign,PI=Math.PI,E=Math.E;'+
+      'return ('+expr+');');
+    var v=f(0,0,0);
+    if(typeof v!=='number')return null;
+    return f;
+  }catch(e){return null;}
+}
+
+/* ── presets ── */
+var PRESETS=[
+  'sin(x)*cos(y)',
+  'sin(sqrt(x*x+y*y)-t*2)',
+  '(x*x-y*y)/8',
+  'exp(-(x*x+y*y)/6)*4*cos(t)',
+  'sin(x+t)*cos(y+t)',
+  'cos(x*y/3+t)',
+  'sqrt(abs(x*y))/2'
+];
+
+/* ── surface ── */
+var SURF_Y=1.6;      /* surface group elevation */
+var WORLD_W=8;       /* world half-width the math range maps onto */
+var ZSCALE=1.4;      /* vertical exaggeration */
+var range=6,res=80;
+var fn=compile('sin(x)*cos(y)');
+var animate=true,wire=false,spin=true;
+
+var grp=new THREE.Group();
+grp.position.y=SURF_Y;
+scene.add(grp);
+
+var mesh=null,wireMesh=null;
+
+function buildSurface(){
+  if(mesh){grp.remove(mesh);mesh.geometry.dispose();}
+  if(wireMesh){grp.remove(wireMesh);wireMesh.geometry.dispose();}
+  var geo=new THREE.PlaneGeometry(WORLD_W*2,WORLD_W*2,res,res);
+  geo.rotateX(-Math.PI/2);
+  var colors=new Float32Array(geo.attributes.position.count*3);
+  geo.setAttribute('color',new THREE.BufferAttribute(colors,3));
+  mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({
+    vertexColors:true,side:THREE.DoubleSide,roughness:.45,metalness:.15,
+    emissive:0x111133,emissiveIntensity:.4
+  }));
+  grp.add(mesh);
+  wireMesh=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({
+    color:0xffffff,wireframe:true,transparent:true,opacity:.12
+  }));
+  wireMesh.visible=wire;
+  grp.add(wireMesh);
+  updateSurface(0,true);
+}
+
+/* height → color gradient: deep blue → cyan → green → yellow → hot pink */
+function heightColor(h,out,o){
+  var stops=[[.1,.2,.7],[.2,.8,.9],[.2,.85,.5],[.95,.85,.3],[.95,.35,.6]];
+  var p=Math.max(0,Math.min(1,h))*(stops.length-1);
+  var i=Math.min(stops.length-2,Math.floor(p)),f=p-i;
+  out[o]=stops[i][0]+(stops[i+1][0]-stops[i][0])*f;
+  out[o+1]=stops[i][1]+(stops[i+1][1]-stops[i][1])*f;
+  out[o+2]=stops[i][2]+(stops[i+1][2]-stops[i][2])*f;
+}
+
+function updateSurface(t,force){
+  if(!fn||!mesh)return;
+  var pos=mesh.geometry.attributes.position;
+  var col=mesh.geometry.attributes.color.array;
+  var n=pos.count;
+  var zmin=Infinity,zmax=-Infinity;
+  var zs=new Float32Array(n);
+  for(var i=0;i<n;i++){
+    var wx=pos.getX(i),wz=pos.getZ(i);
+    var mx=wx/WORLD_W*range,my=wz/WORLD_W*range;
+    var z=fn(mx,my,t);
+    if(!isFinite(z))z=0;
+    z=Math.max(-12,Math.min(12,z));
+    zs[i]=z;
+    if(z<zmin)zmin=z;
+    if(z>zmax)zmax=z;
+  }
+  var span=Math.max(zmax-zmin,.001);
+  for(var i=0;i<n;i++){
+    pos.setY(i,zs[i]*ZSCALE*(2/Math.max(2,span*.55)));
+    heightColor((zs[i]-zmin)/span,col,i*3);
+  }
+  pos.needsUpdate=true;
+  mesh.geometry.attributes.color.needsUpdate=true;
+  mesh.geometry.computeVertexNormals();
+}
+
+/* axis labels */
+var lx=lab.textSprite('x','#60a5fa',.5);lx.position.set(WORLD_W+1,SURF_Y,0);scene.add(lx);
+var ly=lab.textSprite('y','#34d399',.5);ly.position.set(0,SURF_Y,WORLD_W+1);scene.add(ly);
+var lz=lab.textSprite('z','#f472b6',.5);lz.position.set(0,SURF_Y+4.4,0);scene.add(lz);
+
+/* ── UI ── */
+var input=document.getElementById('fx');
+var chipsBox=document.getElementById('chips');
+PRESETS.forEach(function(p){
+  var c=document.createElement('span');
+  c.className='fx-chip';c.textContent=p;
+  c.onclick=function(){
+    input.value=p;
+    onFormula();
+    document.querySelectorAll('.fx-chip').forEach(function(x){x.classList.remove('active');});
+    c.classList.add('active');
+  };
+  chipsBox.appendChild(c);
+});
+
+function onFormula(){
+  var f=compile(input.value);
+  input.classList.toggle('err',!f);
+  if(f){fn=f;updateSurface(tNow,true);}
+}
+input.addEventListener('input',onFormula);
+
+document.getElementById('range').addEventListener('input',function(){
+  range=+this.value;
+  document.getElementById('range-v').textContent='±'+range;
+  updateSurface(tNow,true);
+});
+document.getElementById('res').addEventListener('input',function(){
+  res=+this.value;
+  document.getElementById('res-v').textContent=res;
+  buildSurface();
+});
+document.getElementById('btn-anim').onclick=function(){
+  animate=!animate;this.classList.toggle('on',animate);
+};
+document.getElementById('btn-wire').onclick=function(){
+  wire=!wire;this.classList.toggle('on',wire);
+  if(wireMesh)wireMesh.visible=wire;
+};
+document.getElementById('btn-spin').onclick=function(){
+  spin=!spin;this.classList.toggle('on',spin);
+};
+
+/* VR trigger: cycle presets */
+var presetIdx=0;
+lab.onSelect(function(){
+  presetIdx=(presetIdx+1)%PRESETS.length;
+  input.value=PRESETS[presetIdx];
+  onFormula();
+});
+
+/* ── loop ── */
+var tNow=0;
+var usesT=function(){return /\bt\b/.test(input.value);};
+lab.onFrame(function(dt){
+  if(animate){
+    tNow+=dt;
+    if(usesT())updateSurface(tNow);
+  }
+  if(spin)grp.rotation.y+=dt*.07;
+});
+
+buildSurface();
+setTimeout(function(){document.getElementById('hint').classList.add('gone');},5500);
+})();
+</script>
+</body>
+</html>

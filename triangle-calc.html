@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>حاسبة المثلث — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<style>
+body{overflow-x:hidden}
+.tc-wrap{max-width:1000px;margin:0 auto;padding:16px 16px 60px;display:flex;gap:18px;flex-wrap:wrap}
+.tc-left{flex:0 0 300px;display:flex;flex-direction:column;gap:12px}
+.tc-right{flex:1;min-width:280px;display:flex;flex-direction:column;gap:14px}
+#tc-canvas{background:#060a18;border-radius:14px;border:1.5px solid rgba(255,255,255,.1);display:block;width:100%}
+.mode-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px 14px}
+.mode-label{font-size:.75rem;color:var(--dim);font-weight:700;margin-bottom:8px}
+.modes-btns{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.mode-btn2{padding:8px 6px;border-radius:8px;border:1.5px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:var(--text);font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;transition:all .15s;text-align:center}
+.mode-btn2:hover,.mode-btn2.active{border-color:#60a5fa;background:rgba(96,165,250,.1);color:#60a5fa}
+.fields-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px}
+.field-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.field-row:last-child{margin-bottom:0}
+.field-label{font-size:.88rem;font-weight:900;width:32px;text-align:center;flex-shrink:0}
+.field-inp{flex:1;padding:9px 10px;background:rgba(0,0,0,.3);border:1.5px solid rgba(255,255,255,.12);border-radius:7px;color:#fff;font-family:inherit;font-size:.95rem;outline:none}
+.field-inp:focus{border-color:#60a5fa}
+.field-inp:disabled{opacity:.35;cursor:default}
+.field-unit{font-size:.75rem;color:var(--dim);width:26px}
+.solve-btn{width:100%;padding:12px;border-radius:10px;border:none;font-family:inherit;font-size:.95rem;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff}
+.solve-btn:hover{opacity:.88}
+.err-msg{color:#ef4444;font-size:.8rem;min-height:18px;text-align:center}
+.results-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.res-cell{background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.08);border-radius:10px;padding:11px;text-align:center}
+.rc-label{font-size:.72rem;color:var(--dim);margin-bottom:3px;font-weight:700}
+.rc-val{font-size:1.15rem;font-weight:900}
+.law-box{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px;font-size:.83rem;color:var(--dim);line-height:1.75}
+.law-box strong{color:var(--text);display:block;margin-bottom:4px}
+@media(max-width:700px){.tc-left{flex:0 0 100%}}
+</style>
+</head>
+<body>
+<header class="portal-header">
+  <a href="math.html" class="portal-header-back">← رجوع</a>
+  <a href="triangle-3d.html" class="portal-header-back" style="border-color:rgba(126,150,250,.45);color:#a5b8fc">🥽 النسخة الغامرة 3D</a>
+  <img src="images/logos/logo.png" alt="EDAMA" class="portal-logo-img"/>
+  <div class="portal-logo-wrap">
+    <div class="portal-logo">EDAMA <span>Virtual Technology</span></div>
+    <div class="portal-tagline">رياضيات — حاسبة المثلثات</div>
+  </div>
+</header>
+<div class="tc-wrap">
+  <div class="tc-left">
+    <div class="mode-card">
+      <div class="mode-label">نوع المثلث / المعطيات</div>
+      <div class="modes-btns">
+        <button class="mode-btn2 active" id="m-right" onclick="setMode('right')">قائم الزاوية</button>
+        <button class="mode-btn2" id="m-sss" onclick="setMode('sss')">ثلاثة أضلاع (SSS)</button>
+        <button class="mode-btn2" id="m-sas" onclick="setMode('sas')">ضلعان وزاوية (SAS)</button>
+        <button class="mode-btn2" id="m-asa" onclick="setMode('asa')">زاويتان وضلع (ASA)</button>
+      </div>
+    </div>
+    <div class="fields-card" id="fields-card"></div>
+    <button class="solve-btn" onclick="solve()">🔢 احسب</button>
+    <div class="err-msg" id="err-msg"></div>
+  </div>
+  <div class="tc-right">
+    <canvas id="tc-canvas" width="500" height="320"></canvas>
+    <div class="results-grid" id="results-grid"></div>
+    <div class="law-box" id="law-box"></div>
+  </div>
+</div>
+<script>
+(function(){
+var cv=document.getElementById('tc-canvas'),ctx=cv.getContext('2d');
+var W=500,H=320;
+var curMode='right';
+var solvedTri=null;
+
+function deg(r){return r*180/Math.PI;}
+function rad(d){return d*Math.PI/180;}
+function fmt(n){return Math.round(n*1000)/1000;}
+
+function setMode(m){
+  curMode=m;
+  ['right','sss','sas','asa'].forEach(function(x){document.getElementById('m-'+x).classList.toggle('active',x===m);});
+  buildFields();
+  solvedTri=null;
+  drawEmpty();
+}
+
+function buildFields(){
+  var fc=document.getElementById('fields-card');
+  var html='';
+  if(curMode==='right'){
+    html=field('a','الضلع a','','طول')+field('b','الضلع b','','طول')+field('c','الوتر c','','طول')+field('A','الزاوية A','','درجة')+
+      '<div style="font-size:.75rem;color:var(--dim);margin-top:4px">أدخل أي قيمتين من الأعلى</div>';
+  }else if(curMode==='sss'){
+    html=field('a','الضلع a','','طول')+field('b','الضلع b','','طول')+field('c','الضلع c','','طول');
+  }else if(curMode==='sas'){
+    html=field('a','الضلع a','','طول')+field('C','الزاوية C (المحصورة)','','درجة')+field('b','الضلع b','','طول');
+  }else{
+    html=field('A','الزاوية A','','درجة')+field('c','الضلع c (المحصور)','','طول')+field('B','الزاوية B','','درجة');
+  }
+  fc.innerHTML=html;
+}
+
+function field(id,label,val,unit){
+  return'<div class="field-row"><span class="field-label" style="color:#60a5fa">'+id+'</span>'+
+    '<input class="field-inp" id="fi-'+id+'" type="number" min="0" placeholder="'+label+'" value="'+(val||')'+'"/>'+
+    '<span class="field-unit">'+unit+'</span></div>';
+}
+
+function getV(id){var el=document.getElementById('fi-'+id);return el?parseFloat(el.value)||null:null;}
+
+function solve(){
+  document.getElementById('err-msg').textContent='';
+  var tri=null;
+  try{
+    if(curMode==='right') tri=solveRight();
+    else if(curMode==='sss') tri=solveSSS();
+    else if(curMode==='sas') tri=solveSAS();
+    else tri=solveASA();
+  }catch(e){document.getElementById('err-msg').textContent=e.message;return;}
+  if(!tri){document.getElementById('err-msg').textContent='بيانات غير كافية أو غير صحيحة';return;}
+  solvedTri=tri;
+  showResults(tri);
+  drawTriangle(tri);
+}
+
+function solveRight(){
+  var a=getV('a'),b=getV('b'),c=getV('c'),A=getV('A');
+  var known=[a,b,c,A].filter(function(x){return x!==null;}).length;
+  if(known<2)throw new Error('أدخل قيمتين على الأقل');
+  if(a&&b&&!c)c=Math.sqrt(a*a+b*b);
+  if(a&&c&&!b)b=Math.sqrt(c*c-a*a);
+  if(b&&c&&!a)a=Math.sqrt(c*c-b*b);
+  if(a&&c&&!A)A=deg(Math.asin(a/c));
+  if(b&&c&&A==null)A=deg(Math.acos(b/c));
+  if(A&&c&&!a)a=c*Math.sin(rad(A));
+  if(A&&c&&!b)b=c*Math.cos(rad(A));
+  if(A&&a&&!c)c=a/Math.sin(rad(A));
+  if(!a&&b&&A)a=b*Math.tan(rad(A));
+  if(!b&&a&&A)b=a/Math.tan(rad(A));
+  if(!c&&a&&b)c=Math.sqrt(a*a+b*b);
+  if(!A&&a&&c)A=deg(Math.asin(a/c));
+  var B=90-A;
+  if(!a||!b||!c||!A)throw new Error('لا يمكن الحل بهذه المعطيات');
+  return{a:a,b:b,c:c,A:A,B:B,C:90,area:0.5*a*b,perim:a+b+c,right:true};
+}
+
+function solveSSS(){
+  var a=getV('a'),b=getV('b'),c=getV('c');
+  if(!a||!b||!c)throw new Error('أدخل الأضلاع الثلاثة');
+  if(a+b<=c||b+c<=a||a+c<=b)throw new Error('هذه الأضلاع لا تُشكّل مثلثاً');
+  var A=deg(Math.acos((b*b+c*c-a*a)/(2*b*c)));
+  var B=deg(Math.acos((a*a+c*c-b*b)/(2*a*c)));
+  var C=180-A-B;
+  var s=(a+b+c)/2;
+  return{a:a,b:b,c:c,A:A,B:B,C:C,area:Math.sqrt(s*(s-a)*(s-b)*(s-c)),perim:a+b+c};
+}
+
+function solveSAS(){
+  var a=getV('a'),C=getV('C'),b=getV('b');
+  if(!a||!C||!b)throw new Error('أدخل الضلعين والزاوية المحصورة');
+  var c=Math.sqrt(a*a+b*b-2*a*b*Math.cos(rad(C)));
+  var A=deg(Math.acos((b*b+c*c-a*a)/(2*b*c)));
+  var B=180-A-C;
+  return{a:a,b:b,c:c,A:A,B:B,C:C,area:0.5*a*b*Math.sin(rad(C)),perim:a+b+c};
+}
+
+function solveASA(){
+  var A=getV('A'),c=getV('c'),B=getV('B');
+  if(!A||!c||!B)throw new Error('أدخل الزاويتين والضلع المحصور');
+  var C=180-A-B;
+  if(C<=0)throw new Error('مجموع الزوايا يجب أن يساوي 180°');
+  var a=c*Math.sin(rad(A))/Math.sin(rad(C));
+  var b=c*Math.sin(rad(B))/Math.sin(rad(C));
+  return{a:a,b:b,c:c,A:A,B:B,C:C,area:0.5*a*b*Math.sin(rad(C)),perim:a+b+c};
+}
+
+function showResults(t){
+  var rg=document.getElementById('results-grid');
+  rg.innerHTML=[
+    {l:'الضلع a',v:fmt(t.a),c:'#60a5fa'},{l:'الضلع b',v:fmt(t.b),c:'#34d399'},{l:'الضلع c',v:fmt(t.c),c:'#f472b6'},
+    {l:'الزاوية A',v:fmt(t.A)+'°',c:'#fb923c'},{l:'الزاوية B',v:fmt(t.B)+'°',c:'#a78bfa'},{l:'الزاوية C',v:fmt(t.C)+'°',c:'#fbbf24'},
+    {l:'المساحة',v:fmt(t.area)},{l:'المحيط',v:fmt(t.perim)}
+  ].map(function(it){
+    return'<div class="res-cell"><div class="rc-label">'+it.l+'</div><div class="rc-val" style="color:'+(it.c||'#fff')+'">'+it.v+'</div></div>';
+  }).join('');
+  var lb=document.getElementById('law-box');
+  lb.innerHTML='<strong>القانون المستخدم:</strong>'+
+    (curMode==='right'?'نظرية فيثاغورث: c² = a² + b²<br/>sin A = a/c | cos A = b/c | tan A = a/b':
+     curMode==='sss'?'قانون جيب التمام: cos A = (b²+c²-a²) / 2bc':
+     curMode==='sas'?'قانون جيب التمام: c² = a²+b² - 2ab·cos C':
+     'قانون الجيب: a/sin A = b/sin B = c/sin C');
+}
+
+function drawEmpty(){
+  ctx.clearRect(0,0,W,H);ctx.fillStyle='#060a18';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(255,255,255,.15)';ctx.font='bold 14px Tajawal,sans-serif';ctx.textAlign='center';
+  ctx.fillText('أدخل المعطيات واضغط "احسب" لرسم المثلث',W/2,H/2);
+}
+
+function drawTriangle(t){
+  ctx.clearRect(0,0,W,H);ctx.fillStyle='#060a18';ctx.fillRect(0,0,W,H);
+  var pad=55;
+  var A=rad(t.A),B=rad(t.B);
+  // place C at origin, B along x
+  var Cx2=0,Cy2=0,Bx=t.c,By=0;
+  var Ax=t.b*Math.cos(A-Math.PI),Ay=-t.b*Math.sin(A-Math.PI);
+  // actually: A at origin, B on x axis at distance c
+  Ax=0;Ay=0;Bx=t.c;By=0;
+  Cx2=t.b*Math.cos(rad(t.A));Cy2=-t.b*Math.sin(rad(t.A));
+  var pts=[{x:Ax,y:Ay},{x:Bx,y:By},{x:Cx2,y:Cy2}];
+  var xs=pts.map(function(p){return p.x;}),ys=pts.map(function(p){return p.y;});
+  var mnx=Math.min.apply(null,xs),mxx=Math.max.apply(null,xs);
+  var mny=Math.min.apply(null,ys),mxy=Math.max.apply(null,ys);
+  var scx=(W-2*pad)/(mxx-mnx||1),scy=(H-2*pad)/(mxy-mny||1),sc=Math.min(scx,scy);
+  var ox=pad+(W-2*pad-(mxx-mnx)*sc)/2;var oy=pad+(H-2*pad-(mxy-mny)*sc)/2;
+  function tx2(p){return ox+(p.x-mnx)*sc;}
+  function ty2(p){return oy+(p.y-mny)*sc;}
+  var tp=pts.map(function(p){return{x:tx2(p),y:ty2(p)};});
+  // fill
+  ctx.beginPath();ctx.moveTo(tp[0].x,tp[0].y);ctx.lineTo(tp[1].x,tp[1].y);ctx.lineTo(tp[2].x,tp[2].y);ctx.closePath();
+  ctx.fillStyle='rgba(96,165,250,.07)';ctx.fill();
+  // sides
+  var sides=[{a:tp[0],b:tp[1],lbl:'c='+fmt(t.c),col:'#f472b6'},{a:tp[1],b:tp[2],lbl:'a='+fmt(t.a),col:'#60a5fa'},{a:tp[2],b:tp[0],lbl:'b='+fmt(t.b),col:'#34d399'}];
+  sides.forEach(function(s){
+    ctx.beginPath();ctx.moveTo(s.a.x,s.a.y);ctx.lineTo(s.b.x,s.b.y);ctx.strokeStyle=s.col;ctx.lineWidth=2.5;ctx.stroke();
+    var mx=(s.a.x+s.b.x)/2,my=(s.a.y+s.b.y)/2;
+    ctx.fillStyle=s.col;ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.fillText(s.lbl,mx,my-6);
+  });
+  // right angle marker
+  if(t.right||Math.abs(t.C-90)<0.5){
+    var s2=10;ctx.strokeStyle='rgba(255,255,255,.4)';ctx.lineWidth=1.5;
+    var vx=tp[2].x,vy=tp[2].y;
+    var d0x=tp[0].x-vx,d0y=tp[0].y-vy,d1x=tp[1].x-vx,d1y=tp[1].y-vy;
+    var l0=Math.sqrt(d0x*d0x+d0y*d0y)||1,l1=Math.sqrt(d1x*d1x+d1y*d1y)||1;
+    var p0x=vx+d0x/l0*s2,p0y=vy+d0y/l0*s2,p1x=vx+d1x/l1*s2,p1y=vy+d1y/l1*s2;
+    ctx.beginPath();ctx.moveTo(p0x,p0y);ctx.lineTo(p0x+d1x/l1*s2,p0y+d1y/l1*s2);ctx.lineTo(p1x,p1y);ctx.stroke();
+  }
+  // vertices
+  [{p:tp[0],lbl:'A='+fmt(t.A)+'°',c:'#fb923c'},{p:tp[1],lbl:'B='+fmt(t.B)+'°',c:'#a78bfa'},{p:tp[2],lbl:'C='+fmt(t.C)+'°',c:'#fbbf24'}].forEach(function(v){
+    ctx.beginPath();ctx.arc(v.p.x,v.p.y,5,0,Math.PI*2);ctx.fillStyle=v.c;ctx.fill();
+    ctx.fillStyle=v.c;ctx.font='bold 10px sans-serif';ctx.textAlign='center';
+    var off=14;ctx.fillText(v.lbl,v.p.x,v.p.y-off);
+  });
+  // area
+  ctx.fillStyle='rgba(255,255,255,.3)';ctx.font='11px sans-serif';ctx.textAlign='center';
+  ctx.fillText('المساحة = '+fmt(t.area),W/2,H-10);
+}
+
+window.setMode=setMode;window.solve=solve;
+buildFields();drawEmpty();
+})();
+</script>
+</body>
+</html>

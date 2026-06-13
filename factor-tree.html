@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>التحليل إلى عوامل — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<style>
+body{overflow-x:hidden}
+.ft-wrap{max-width:900px;margin:0 auto;padding:16px 16px 60px;display:flex;flex-direction:column;gap:16px}
+.ft-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:14px 16px;background:rgba(255,255,255,.04);border-radius:12px;border:1px solid rgba(255,255,255,.08)}
+.ft-top label{font-size:.88rem;color:var(--dim);font-weight:700}
+.ft-inp{padding:10px 14px;background:rgba(0,0,0,.3);border:1.5px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-family:inherit;font-size:1.2rem;font-weight:900;width:120px;outline:none;text-align:center}
+.ft-inp:focus{border-color:#60a5fa}
+.ft-btn{padding:10px 22px;border-radius:9px;border:none;font-family:inherit;font-size:.95rem;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;transition:opacity .18s}
+.ft-btn:hover{opacity:.85}
+.ft-presets{display:flex;gap:6px;flex-wrap:wrap}
+.ft-pre{padding:6px 12px;border-radius:7px;border:1.5px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:var(--text);font-family:inherit;font-size:.85rem;font-weight:700;cursor:pointer;transition:all .15s}
+.ft-pre:hover{border-color:#60a5fa;color:#60a5fa}
+.ft-result{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
+#ft-canvas{background:#060a18;border-radius:14px;border:1.5px solid rgba(255,255,255,.1);display:block;flex-shrink:0}
+.ft-info-col{flex:1;min-width:220px;display:flex;flex-direction:column;gap:12px}
+.res-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px}
+.res-title{font-size:.75rem;color:var(--dim);font-weight:700;margin-bottom:8px}
+.res-eq{font-size:1.3rem;font-weight:900;color:#60a5fa;word-break:break-all;line-height:1.5}
+.factors-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.fc-chip{padding:6px 14px;border-radius:8px;font-size:.95rem;font-weight:900;background:rgba(96,165,250,.15);color:#60a5fa;border:1.5px solid rgba(96,165,250,.3)}
+.fc-chip.prime{background:rgba(52,211,153,.15);color:#34d399;border-color:rgba(52,211,153,.35)}
+.ft-facts{display:flex;flex-direction:column;gap:8px}
+.fact-row{display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(0,0,0,.2);border-radius:8px;font-size:.88rem}
+.fact-badge{padding:2px 8px;border-radius:5px;font-size:.7rem;font-weight:700;background:rgba(96,165,250,.15);color:#60a5fa;flex-shrink:0}
+.ft-edu{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px;font-size:.83rem;color:var(--dim);line-height:1.75}
+.ft-edu strong{color:var(--text)}
+</style>
+</head>
+<body>
+<header class="portal-header">
+  <a href="math.html" class="portal-header-back">← رجوع</a>
+  <a href="factor-tree-3d.html" class="portal-header-back" style="border-color:rgba(126,150,250,.45);color:#a5b8fc">🥽 النسخة الغامرة 3D</a>
+  <img src="images/logos/logo.png" alt="EDAMA" class="portal-logo-img"/>
+  <div class="portal-logo-wrap">
+    <div class="portal-logo">EDAMA <span>Virtual Technology</span></div>
+    <div class="portal-tagline">رياضيات — التحليل إلى عوامل أولية</div>
+  </div>
+</header>
+<div class="ft-wrap">
+  <div class="ft-top">
+    <label>العدد:</label>
+    <input class="ft-inp" id="ft-inp" type="number" min="2" max="9999" value="60" oninput="analyze()"/>
+    <button class="ft-btn" onclick="analyze()">حلّل</button>
+    <div class="ft-presets">
+      <button class="ft-pre" onclick="setNum(12)">12</button>
+      <button class="ft-pre" onclick="setNum(36)">36</button>
+      <button class="ft-pre" onclick="setNum(60)">60</button>
+      <button class="ft-pre" onclick="setNum(100)">100</button>
+      <button class="ft-pre" onclick="setNum(360)">360</button>
+      <button class="ft-pre" onclick="setNum(1024)">1024</button>
+      <button class="ft-pre" onclick="setNum(2310)">2310</button>
+    </div>
+  </div>
+  <div class="ft-result">
+    <canvas id="ft-canvas" width="380" height="420"></canvas>
+    <div class="ft-info-col">
+      <div class="res-card">
+        <div class="res-title">التحليل الأولي</div>
+        <div class="res-eq" id="res-eq">—</div>
+      </div>
+      <div class="res-card">
+        <div class="res-title">العوامل الأولية</div>
+        <div class="factors-chips" id="fac-chips"></div>
+      </div>
+      <div class="res-card">
+        <div class="res-title">معلومات العدد</div>
+        <div class="ft-facts" id="ft-facts"></div>
+      </div>
+      <div class="ft-edu">
+        <strong>ما هو التحليل إلى عوامل أولية؟</strong><br/>
+        نكتب العدد كحاصل ضرب أعداد أولية فقط.<br/>
+        مثال: 12 = 2 × 2 × 3 = 2² × 3<br/><br/>
+        <strong>الشجرة:</strong> نقسم العدد على أصغر عامل أولي ممكن، ثم نكرر مع الناتج حتى نصل لعدد أولي.
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+var cv=document.getElementById('ft-canvas'),ctx=cv.getContext('2d');
+var W=380,H=420;
+
+function setNum(n){document.getElementById('ft-inp').value=n;analyze();}
+
+function factorize(n){
+  var factors=[],d=2;
+  while(d*d<=n){while(n%d===0){factors.push(d);n=Math.floor(n/d);}d++;}
+  if(n>1)factors.push(n);
+  return factors;
+}
+
+function isPrime(n){if(n<2)return false;for(var i=2;i*i<=n;i++)if(n%i===0)return false;return true;}
+function divisors(n){var d=[];for(var i=1;i<=n;i++)if(n%i===0)d.push(i);return d;}
+
+function analyze(){
+  var n=parseInt(document.getElementById('ft-inp').value);
+  if(!n||n<2||n>9999){return;}
+  var factors=factorize(n);
+  // group
+  var groups={};factors.forEach(function(f){groups[f]=(groups[f]||0)+1;});
+  var eq=Object.keys(groups).map(function(k){return groups[k]>1?k+'^'+groups[k]:k;}).join(' × ');
+  document.getElementById('res-eq').textContent=n+' = '+eq;
+  // chips
+  var uniq=Object.keys(groups).map(Number);
+  document.getElementById('fac-chips').innerHTML=factors.map(function(f){
+    return'<span class="fc-chip prime">'+f+'</span>';
+  }).join('<span style="color:var(--dim);font-weight:900;font-size:1.1rem">×</span>');
+  // facts
+  var divs=divisors(n);
+  document.getElementById('ft-facts').innerHTML=[
+    ['عدد العوامل الأولية (مع التكرار)',factors.length],
+    ['عدد العوامل الأولية المختلفة',uniq.length],
+    ['عدد القواسم',divs.length],
+    ['هل هو عدد أولي؟',isPrime(n)?'نعم ✓':'لا'],
+    ['هل هو مربع كامل؟',Math.sqrt(n)%1===0?'نعم √'+Math.sqrt(n):'لا']
+  ].map(function(r){
+    return'<div class="fact-row"><span class="fact-badge">معلومة</span><span>'+r[0]+'</span><span style="color:#60a5fa;font-weight:900;margin-right:auto">'+r[1]+'</span></div>';
+  }).join('');
+  drawTree(n,factors);
+}
+
+function drawTree(n,factors){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#060a18';ctx.fillRect(0,0,W,H);
+  var COLORS=['#60a5fa','#34d399','#f472b6','#fb923c','#a78bfa','#fbbf24'];
+  // build tree data
+  var nodes=[],edges=[];
+  var nodeId=0;
+  function addNode(val,prime,x,y){return{id:nodeId++,val:val,prime:prime,x:x,y:y};}
+  function buildTree(val,x,y,factors,depth){
+    var me=addNode(val,factors.length===0,x,y);
+    nodes.push(me);
+    if(factors.length===0)return me;
+    var f=factors[0];var rest=factors.slice(1);
+    var q=val/f;
+    var spread=Math.max(60,160/(depth+1));
+    var left=buildTree(f,x-spread,y+70,[],depth+1);
+    var right=buildTree(q,x+spread,y+70,rest,depth+1);
+    edges.push({from:me,to:left});edges.push({from:me,to:right});
+    return me;
+  }
+  buildTree(n,W/2,36,factors,0);
+  // draw edges
+  edges.forEach(function(e){
+    ctx.beginPath();ctx.moveTo(e.from.x,e.from.y+16);ctx.lineTo(e.to.x,e.to.y-16);
+    ctx.strokeStyle='rgba(255,255,255,.2)';ctx.lineWidth=1.5;ctx.stroke();
+  });
+  // draw nodes
+  nodes.forEach(function(nd,i){
+    var r=nd.prime?18:20;
+    var col=nd.prime?COLORS[nd.val%COLORS.length]:'rgba(255,255,255,.12)';
+    ctx.beginPath();ctx.arc(nd.x,nd.y,r,0,Math.PI*2);
+    if(nd.prime){
+      var g=ctx.createRadialGradient(nd.x-4,nd.y-4,0,nd.x,nd.y,r);
+      g.addColorStop(0,col);g.addColorStop(1,col.replace('fa','64').replace('99','32').replace('b6','72'));
+      ctx.fillStyle=g;
+    }else{ctx.fillStyle='rgba(30,40,70,.9)';}
+    ctx.fill();
+    ctx.strokeStyle=nd.prime?col:'rgba(255,255,255,.18)';ctx.lineWidth=nd.prime?2:1;ctx.stroke();
+    ctx.fillStyle=nd.prime?'#fff':'rgba(255,255,255,.7)';
+    ctx.font=(nd.prime?'bold ':'')+(nd.val>99?'10':'12')+'px sans-serif';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(nd.val,nd.x,nd.y);
+    if(nd.prime){
+      ctx.fillStyle='rgba(255,255,255,.4)';ctx.font='8px sans-serif';
+      ctx.fillText('أولي',nd.x,nd.y+28);
+    }
+    ctx.textBaseline='alphabetic';
+  });
+}
+
+window.setNum=setNum;window.analyze=analyze;
+analyze();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<title>مختبر التصادمات ثلاثي الأبعاد — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<link rel="stylesheet" href="css/xrlab.css"/>
+</head>
+<body>
+
+<div id="scene"></div>
+
+<header class="hud-header">
+  <a href="physics.html" class="hud-back">← رجوع</a>
+  <div class="hud-title">💥 مختبر التصادمات <span>ثلاثي الأبعاد</span></div>
+  <a href="momentum.html" class="hud-2d">📊 الوضع المبسّط 2D</a>
+</header>
+
+<div class="hint glass" id="hint">🖱️ اسحب للتدوير · في VR اضغط الزناد لإطلاق التصادم</div>
+
+<div class="side-panel">
+  <div class="glass sp-section">
+    <div class="sp-title">نوع التصادم</div>
+    <div class="sp-tabs">
+      <button class="sp-tab active" id="tab-elastic">مرن</button>
+      <button class="sp-tab" id="tab-inelastic">عديم المرونة</button>
+    </div>
+    <div class="sp-title">الكرة الأولى 🔵</div>
+    <div class="sp-row">
+      <span class="sp-name">الكتلة</span>
+      <input class="sp-slider" type="range" id="m1" min="1" max="10" step="1" value="4"/>
+      <span class="sp-val" id="m1v">4</span>
+    </div>
+    <div class="sp-row">
+      <span class="sp-name">السرعة</span>
+      <input class="sp-slider" type="range" id="v1" min="-6" max="6" step="0.5" value="3"/>
+      <span class="sp-val" id="v1v">3</span>
+    </div>
+    <div class="sp-title">الكرة الثانية 🟠</div>
+    <div class="sp-row">
+      <span class="sp-name">الكتلة</span>
+      <input class="sp-slider" type="range" id="m2" min="1" max="10" step="1" value="2"/>
+      <span class="sp-val" id="m2v">2</span>
+    </div>
+    <div class="sp-row">
+      <span class="sp-name">السرعة</span>
+      <input class="sp-slider" type="range" id="v2" min="-6" max="6" step="0.5" value="-2"/>
+      <span class="sp-val" id="v2v">-2</span>
+    </div>
+  </div>
+
+  <div class="glass sp-section">
+    <button class="sp-btn" id="btn-run">▶ إطلاق التصادم</button>
+    <div style="height:8px"></div>
+    <button class="sp-btn secondary" id="btn-reset">↺ إعادة الضبط</button>
+  </div>
+
+  <div class="glass sp-section">
+    <div class="sp-title">كمية التحرك p = m×v</div>
+    <div class="sp-stats">
+      <div class="sp-stat"><div class="sp-stat-l">قبل التصادم</div><div class="sp-stat-v" id="p-before">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l">بعد التصادم</div><div class="sp-stat-v" id="p-after">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l">ط. الحركة قبل</div><div class="sp-stat-v" id="k-before">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l">ط. الحركة بعد</div><div class="sp-stat-v" id="k-after">—</div></div>
+    </div>
+    <div id="verdict" style="margin-top:9px;font-size:.74rem;font-weight:700;text-align:center;color:#34d399"></div>
+  </div>
+</div>
+
+<script src="js/vendor/three.min.js"></script>
+<script src="js/vendor/OrbitControls.js"></script>
+<script src="js/vendor/VRButton.js"></script>
+<script src="js/xrlab.js"></script>
+<script>
+(function(){
+'use strict';
+
+var lab=XRLab.init({cameraPos:[0,2.6,7.5],target:[0,1.1,0],maxDistance:30});
+var scene=lab.scene;
+
+/* ── lab table ── */
+var TABLE_Y=.95,TRACK_LEN=10;
+var table=new THREE.Mesh(
+  new THREE.BoxGeometry(TRACK_LEN+2,.18,2.2),
+  new THREE.MeshStandardMaterial({color:0x101a3a,roughness:.4,metalness:.5})
+);
+table.position.y=TABLE_Y-.09;
+scene.add(table);
+/* glowing track edges */
+[[-1.05],[1.05]].forEach(function(z){
+  var rail=new THREE.Mesh(
+    new THREE.BoxGeometry(TRACK_LEN+2,.04,.05),
+    new THREE.MeshBasicMaterial({color:0x60a5fa,transparent:true,opacity:.7})
+  );
+  rail.position.set(0,TABLE_Y+.01,z[0]);
+  scene.add(rail);
+});
+/* table legs */
+[[-(TRACK_LEN/2+.6),-.9],[ (TRACK_LEN/2+.6),-.9],[-(TRACK_LEN/2+.6),.9],[(TRACK_LEN/2+.6),.9]].forEach(function(p){
+  var leg=new THREE.Mesh(
+    new THREE.CylinderGeometry(.06,.08,TABLE_Y-.18,10),
+    new THREE.MeshStandardMaterial({color:0x182448,roughness:.5,metalness:.6})
+  );
+  leg.position.set(p[0],(TABLE_Y-.18)/2,p[1]);
+  scene.add(leg);
+});
+
+/* ── balls ── */
+var ballGeo=new THREE.SphereGeometry(1,28,22);
+var mat1=new THREE.MeshStandardMaterial({color:0x3b82f6,roughness:.25,metalness:.3,emissive:0x0a2a66,emissiveIntensity:.5});
+var mat2=new THREE.MeshStandardMaterial({color:0xf97316,roughness:.25,metalness:.3,emissive:0x66290a,emissiveIntensity:.5});
+var ball1=new THREE.Mesh(ballGeo,mat1);
+var ball2=new THREE.Mesh(ballGeo,mat2);
+scene.add(ball1);scene.add(ball2);
+
+var lbl1=lab.textSprite('','#60a5fa',.42);
+var lbl2=lab.textSprite('','#fb923c',.42);
+scene.add(lbl1);scene.add(lbl2);
+
+var arr1=new THREE.ArrowHelper(new THREE.Vector3(1,0,0),new THREE.Vector3(),1,0x93c5fd,.22,.12);
+var arr2=new THREE.ArrowHelper(new THREE.Vector3(1,0,0),new THREE.Vector3(),1,0xfdba74,.22,.12);
+scene.add(arr1);scene.add(arr2);
+
+/* collision flash light */
+var flash=new THREE.PointLight(0xffffff,0,12);
+flash.position.set(0,TABLE_Y+.6,0);
+scene.add(flash);
+
+/* ── physics state ── */
+var S={m1:4,v1:3,m2:2,v2:-2,elastic:true,
+       x1:-TRACK_LEN/2+1,x2:TRACK_LEN/2-1,
+       cv1:0,cv2:0,running:false,collided:false,stuck:false};
+
+function radiusOf(m){return .22+Math.cbrt(m)*.16;}
+
+function fmt(n){return (Math.round(n*100)/100).toString();}
+
+function readUI(){
+  S.m1=+document.getElementById('m1').value;
+  S.v1=+document.getElementById('v1').value;
+  S.m2=+document.getElementById('m2').value;
+  S.v2=+document.getElementById('v2').value;
+  document.getElementById('m1v').textContent=S.m1;
+  document.getElementById('v1v').textContent=S.v1;
+  document.getElementById('m2v').textContent=S.m2;
+  document.getElementById('v2v').textContent=S.v2;
+}
+
+function reset(){
+  readUI();
+  S.running=false;S.collided=false;S.stuck=false;
+  S.x1=-TRACK_LEN/2+1;S.x2=TRACK_LEN/2-1;
+  S.cv1=S.v1;S.cv2=S.v2;
+  document.getElementById('p-before').textContent=fmt(S.m1*S.v1+S.m2*S.v2);
+  document.getElementById('p-after').textContent='—';
+  document.getElementById('k-before').textContent=fmt(.5*S.m1*S.v1*S.v1+.5*S.m2*S.v2*S.v2);
+  document.getElementById('k-after').textContent='—';
+  document.getElementById('verdict').textContent='';
+  syncVisual();
+}
+
+function syncVisual(){
+  var r1=radiusOf(S.m1),r2=radiusOf(S.m2);
+  ball1.scale.setScalar(r1);ball2.scale.setScalar(r2);
+  ball1.position.set(S.x1,TABLE_Y+r1,0);
+  ball2.position.set(S.x2,TABLE_Y+r2,0);
+  lbl1.position.set(S.x1,TABLE_Y+r1*2+.55,0);
+  lbl2.position.set(S.x2,TABLE_Y+r2*2+.55,0);
+  lbl1.setText(S.m1+' كغ · '+fmt(S.cv1)+' م/ث');
+  lbl2.setText(S.m2+' كغ · '+fmt(S.cv2)+' م/ث');
+  updArrow(arr1,S.x1,r1,S.cv1);
+  updArrow(arr2,S.x2,r2,S.cv2);
+}
+
+function updArrow(arr,x,r,v){
+  var len=Math.abs(v)*.28;
+  arr.visible=len>.05;
+  if(!arr.visible)return;
+  arr.position.set(x,TABLE_Y+r,0);
+  arr.setDirection(new THREE.Vector3(v>0?1:-1,0,0));
+  arr.setLength(len,.22,.12);
+}
+
+function collide(){
+  S.collided=true;
+  flash.intensity=6;
+  if(S.elastic){
+    var u1=S.cv1,u2=S.cv2,m1=S.m1,m2=S.m2;
+    S.cv1=((m1-m2)*u1+2*m2*u2)/(m1+m2);
+    S.cv2=((m2-m1)*u2+2*m1*u1)/(m1+m2);
+  }else{
+    var v=(S.m1*S.cv1+S.m2*S.cv2)/(S.m1+S.m2);
+    S.cv1=v;S.cv2=v;S.stuck=true;
+  }
+  document.getElementById('p-after').textContent=fmt(S.m1*S.cv1+S.m2*S.cv2);
+  var kAfter=.5*S.m1*S.cv1*S.cv1+.5*S.m2*S.cv2*S.cv2;
+  document.getElementById('k-after').textContent=fmt(kAfter);
+  var kBefore=+document.getElementById('k-before').textContent;
+  var verdict=document.getElementById('verdict');
+  if(S.elastic){
+    verdict.style.color='#34d399';
+    verdict.textContent='✓ كمية التحرك محفوظة + الطاقة الحركية محفوظة';
+  }else{
+    verdict.style.color='#fbbf24';
+    verdict.textContent='✓ كمية التحرك محفوظة — فُقد '+fmt(kBefore-kAfter)+' جول حرارةً وصوتاً';
+  }
+}
+
+function run(){
+  if(S.running)return;
+  if(S.collided)reset();
+  readUI();
+  S.cv1=S.v1;S.cv2=S.v2;
+  S.running=true;
+}
+
+lab.onFrame(function(dt,t){
+  flash.intensity=Math.max(0,flash.intensity-dt*14);
+
+  if(S.running){
+    S.x1+=S.cv1*dt;S.x2+=S.cv2*dt;
+    var r1=radiusOf(S.m1),r2=radiusOf(S.m2);
+
+    if(!S.collided&&S.x2-S.x1<=r1+r2)collide();
+
+    /* rolling rotation */
+    ball1.rotation.z-=S.cv1*dt/r1;
+    ball2.rotation.z-=S.cv2*dt/r2;
+
+    /* stuck pair moves as one */
+    if(S.stuck)S.x2=S.x1+r1+r2;
+
+    /* stop when both leave the table */
+    var edge=TRACK_LEN/2+1.6;
+    if((S.x1<-edge||S.x1>edge)&&(S.x2<-edge||S.x2>edge))S.running=false;
+    syncVisual();
+  }
+
+  /* idle bobbing of labels */
+  lbl1.position.y+=Math.sin(t*2.1)*.0008;
+  lbl2.position.y+=Math.sin(t*2.1+1)*.0008;
+});
+
+/* ── UI wiring ── */
+['m1','v1','m2','v2'].forEach(function(id){
+  document.getElementById(id).addEventListener('input',function(){
+    if(!S.running)reset();else readUI();
+  });
+});
+document.getElementById('tab-elastic').onclick=function(){
+  S.elastic=true;
+  this.classList.add('active');
+  document.getElementById('tab-inelastic').classList.remove('active');
+  reset();
+};
+document.getElementById('tab-inelastic').onclick=function(){
+  S.elastic=false;
+  this.classList.add('active');
+  document.getElementById('tab-elastic').classList.remove('active');
+  reset();
+};
+document.getElementById('btn-run').onclick=run;
+document.getElementById('btn-reset').onclick=reset;
+
+/* VR: trigger = run / replay */
+lab.onSelect(function(){ if(S.running)reset();else run(); });
+
+/* VR comfort placement: scene already human-scale, table at ~1m height */
+setTimeout(function(){document.getElementById('hint').classList.add('gone');},5500);
+
+reset();
+})();
+</script>
+</body>
+</html>

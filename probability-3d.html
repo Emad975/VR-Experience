@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<title>لوحة غالتون الغامرة — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<link rel="stylesheet" href="css/xrlab.css"/>
+</head>
+<body>
+
+<div id="scene"></div>
+
+<header class="hud-header">
+  <a href="math.html" class="hud-back">← رجوع</a>
+  <div class="hud-title">🎲 لوحة غالتون <span>الغامرة</span> — الاحتمالات تتجسد</div>
+  <a href="probability.html" class="hud-2d">📊 الوضع المبسّط 2D</a>
+</header>
+
+<div class="hint glass" id="hint">كل كرة تقفز يميناً أو يساراً باحتمال ½ — وشاهد الجرس الطبيعي يُبنى وحده</div>
+
+<div class="side-panel">
+  <div class="glass sp-section">
+    <div class="sp-title">الإعدادات</div>
+    <div class="sp-row">
+      <span class="sp-name">الكرات</span>
+      <input class="sp-slider" type="range" id="rate" min="1" max="10" step="1" value="4"/>
+      <span class="sp-val" id="rate-v">4</span>
+    </div>
+    <button class="sp-btn" id="btn-run">▶ أطلق الكرات</button>
+    <div style="height:8px"></div>
+    <button class="sp-btn secondary" id="btn-reset">↺ تفريغ</button>
+  </div>
+
+  <div class="glass sp-section">
+    <div class="sp-title">الإحصاء الحي</div>
+    <div class="sp-stats">
+      <div class="sp-stat"><div class="sp-stat-l">كرات سقطت</div><div class="sp-stat-v" id="total-v">0</div></div>
+      <div class="sp-stat"><div class="sp-stat-l">العمود الأعلى</div><div class="sp-stat-v" id="mode-v">—</div></div>
+    </div>
+    <div style="margin-top:9px;font-size:.74rem;color:#94a3b8;line-height:1.8;text-align:center">
+      التوزيع ذو الحدين يقترب من<br/><b style="color:#60a5fa">منحنى الجرس الطبيعي</b> كلما زادت الكرات
+    </div>
+  </div>
+</div>
+
+<script src="js/vendor/three.min.js"></script>
+<script src="js/vendor/OrbitControls.js"></script>
+<script src="js/vendor/VRButton.js"></script>
+<script src="js/xrlab.js"></script>
+<script>
+(function(){
+'use strict';
+
+var lab=XRLab.init({cameraPos:[0,3.6,10.5],target:[0,3,0],maxDistance:35});
+var scene=lab.scene;
+
+/* ── board geometry ── */
+var ROWS=9;              /* peg rows */
+var BINS=ROWS+1;
+var PEG_DX=.62,PEG_DY=.58;
+var TOP_Y=6.2;           /* drop point height */
+var PEG_TOP=5.4;
+var BIN_TOP=PEG_TOP-ROWS*PEG_DY;  /* where bins start */
+var BALL_R=.13;
+var BIN_W=PEG_DX;
+var MAX_STACK=14;
+
+/* back panel */
+var panel=new THREE.Mesh(
+  new THREE.BoxGeometry(BINS*PEG_DX+1.6,TOP_Y+1,.12),
+  new THREE.MeshStandardMaterial({color:0x0b1330,roughness:.5,metalness:.4,transparent:true,opacity:.85})
+);
+panel.position.set(0,(TOP_Y+1)/2-.5,-.32);
+scene.add(panel);
+
+/* pegs */
+var pegGeo=new THREE.SphereGeometry(.07,12,10);
+var pegMat=new THREE.MeshStandardMaterial({color:0x93c5fd,emissive:0x2a4a8a,emissiveIntensity:.7});
+var pegs=[];
+for(var r=0;r<ROWS;r++){
+  for(var i=0;i<=r;i++){
+    var px=(i-r/2)*PEG_DX;
+    var py=PEG_TOP-r*PEG_DY;
+    var peg=new THREE.Mesh(pegGeo,pegMat);
+    peg.position.set(px,py,0);
+    scene.add(peg);
+    pegs.push(peg);
+  }
+}
+
+/* bins (dividers) */
+var divMat=new THREE.MeshStandardMaterial({color:0x3b5bb0,roughness:.4,metalness:.5,transparent:true,opacity:.65});
+for(var b=0;b<=BINS;b++){
+  var dx=(b-BINS/2)*BIN_W;
+  var div=new THREE.Mesh(new THREE.BoxGeometry(.045,BIN_TOP,.3),divMat);
+  div.position.set(dx,BIN_TOP/2,0);
+  scene.add(div);
+}
+
+/* expected normal curve (drawn above bins, scaled later) */
+var curveLine=null;
+function drawCurve(maxCount,total){
+  if(curveLine){scene.remove(curveLine);curveLine.geometry.dispose();}
+  if(total<10)return;
+  /* binomial(n=ROWS, p=.5) expectation per bin */
+  function C(n,k){var r=1;for(var i=0;i<k;i++)r=r*(n-i)/(i+1);return r;}
+  var pts=[];
+  for(var x=0;x<=BINS-1;x+=.1){
+    var k=x;
+    /* smooth interpolation of binomial pmf via gamma approx → use normal approx */
+    var mu=ROWS/2,sg=Math.sqrt(ROWS)/2;
+    var p=Math.exp(-(k-mu)*(k-mu)/(2*sg*sg))/(sg*Math.sqrt(2*Math.PI));
+    var expCount=p*total;
+    var h=Math.min(expCount/maxCount,1.15)*(BIN_TOP-.3);
+    pts.push(new THREE.Vector3((k-(BINS-1)/2)*BIN_W,h+.15,.25));
+  }
+  var g=new THREE.BufferGeometry().setFromPoints(pts);
+  curveLine=new THREE.Line(g,new THREE.LineBasicMaterial({color:0xf472b6,transparent:true,opacity:.9}));
+  scene.add(curveLine);
+}
+
+/* ── balls ── */
+var ballGeo=new THREE.SphereGeometry(BALL_R,14,11);
+var ballMats=[
+  new THREE.MeshStandardMaterial({color:0xfbbf24,emissive:0x7a5a00,emissiveIntensity:.6}),
+  new THREE.MeshStandardMaterial({color:0x34d399,emissive:0x0a5a3a,emissiveIntensity:.6}),
+  new THREE.MeshStandardMaterial({color:0x60a5fa,emissive:0x1a3a7a,emissiveIntensity:.6}),
+  new THREE.MeshStandardMaterial({color:0xf472b6,emissive:0x7a1a4a,emissiveIntensity:.6})
+];
+
+var balls=[];        /* active falling balls */
+var binCounts=[];
+var stacks=[];       /* settled ball meshes per bin */
+var total=0;
+var running=false,rate=4,spawnT=0;
+
+function resetBins(){
+  binCounts=new Array(BINS).fill(0);
+  stacks.forEach(function(arr){arr.forEach(function(m){scene.remove(m);});});
+  stacks=[];for(var i=0;i<BINS;i++)stacks.push([]);
+  balls.forEach(function(b){scene.remove(b.mesh);});
+  balls=[];
+  total=0;
+  if(curveLine){scene.remove(curveLine);curveLine=null;}
+  document.getElementById('total-v').textContent='0';
+  document.getElementById('mode-v').textContent='—';
+}
+
+function spawn(){
+  var mesh=new THREE.Mesh(ballGeo,ballMats[Math.floor(Math.random()*ballMats.length)]);
+  mesh.position.set(0,TOP_Y,0);
+  scene.add(mesh);
+  /* pre-decide the path: ROWS left/right choices */
+  var k=0;
+  for(var i=0;i<ROWS;i++)if(Math.random()<.5)k++;
+  balls.push({mesh:mesh,row:-1,k:k,offset:0,prog:0,vy:0,settled:false,bin:k});
+}
+
+/* animate a ball bouncing down the peg rows toward its bin */
+function moveBall(b,dt){
+  b.prog+=dt*3.2;
+  while(b.prog>=1){
+    b.prog-=1;b.row++;
+    if(b.row>=ROWS){
+      /* settle into bin */
+      var bin=b.bin;
+      var stackH=binCounts[bin];
+      if(stackH<MAX_STACK){
+        var sx=(bin-(BINS-1)/2)*BIN_W;
+        var sy=BALL_R+stackH*BALL_R*2;
+        b.mesh.position.set(sx,sy,0);
+        stacks[bin].push(b.mesh);
+        binCounts[bin]++;
+      }else{
+        scene.remove(b.mesh);
+      }
+      total++;
+      b.settled=true;
+      document.getElementById('total-v').textContent=total;
+      var maxC=Math.max.apply(null,binCounts);
+      var mode=binCounts.indexOf(maxC);
+      document.getElementById('mode-v').textContent='رقم '+mode;
+      drawCurve(Math.max(maxC,1),total);
+      return;
+    }
+  }
+  if(b.settled)return;
+  /* position interpolation between rows */
+  var row=b.row,pr=b.prog;
+  /* count rights taken so far along its fixed path:
+     distribute the k rights evenly across rows for smooth visual */
+  function xAt(r){
+    if(r<0)return 0;
+    var rights=0;
+    /* deterministic pseudo-path from k: spread rights */
+    for(var i=0;i<=r;i++){
+      var need=b.k,have=ROWS;
+      /* take a right at row i if cumulative quota says so */
+      if(Math.floor((i+1)*need/have)>Math.floor(i*need/have))rights++;
+    }
+    return (rights-(r+1)/2)*PEG_DX;
+  }
+  var x0=xAt(row-1),x1=xAt(row);
+  var y0=row<0?TOP_Y:PEG_TOP-row*PEG_DY;
+  var y1=PEG_TOP-(row+1)*PEG_DY;
+  /* arc hop */
+  var x=x0+(x1-x0)*pr;
+  var y=y0+(y1-y0)*pr+Math.sin(pr*Math.PI)*.12;
+  b.mesh.position.set(x,Math.max(y,BALL_R),0);
+}
+
+lab.onFrame(function(dt,t){
+  if(running){
+    spawnT+=dt*rate;
+    while(spawnT>=1){spawnT-=1;spawn();}
+  }
+  for(var i=balls.length-1;i>=0;i--){
+    var b=balls[i];
+    if(!b.settled)moveBall(b,dt);
+    else balls.splice(i,1);
+  }
+  /* peg twinkle */
+  pegMat.emissiveIntensity=.6+Math.sin(t*2.2)*.2;
+});
+
+/* ── UI ── */
+document.getElementById('rate').addEventListener('input',function(){
+  rate=+this.value;
+  document.getElementById('rate-v').textContent=rate;
+});
+document.getElementById('btn-run').onclick=function(){
+  running=!running;
+  this.textContent=running?'⏸ إيقاف':'▶ أطلق الكرات';
+};
+document.getElementById('btn-reset').onclick=function(){
+  running=false;
+  document.getElementById('btn-run').textContent='▶ أطلق الكرات';
+  resetBins();
+};
+lab.onSelect(function(){
+  running=!running;
+  document.getElementById('btn-run').textContent=running?'⏸ إيقاف':'▶ أطلق الكرات';
+});
+
+resetBins();
+setTimeout(function(){document.getElementById('hint').classList.add('gone');},5500);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>المثلثات — EDAMA Virtual Technology</title>
+  <link rel="stylesheet" href="css/portal.css"/>
+  <style>
+    body{overflow-x:hidden}
+
+    /* ── layout ── */
+    .trig-main{
+      max-width:1100px;margin:0 auto;
+      padding:20px 18px 60px;
+      display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start;
+    }
+
+    /* ── canvas column ── */
+    .trig-canvas-col{
+      flex:0 0 400px;display:flex;flex-direction:column;
+      align-items:center;gap:14px;
+    }
+    #trig-canvas{
+      width:380px;height:380px;
+      border-radius:16px;background:#060a18;
+      border:1.5px solid rgba(255,255,255,.1);
+      cursor:crosshair;touch-action:none;display:block;
+    }
+    .angle-display{
+      background:rgba(255,255,255,.05);
+      border:1.5px solid rgba(255,255,255,.1);
+      border-radius:12px;padding:10px 20px;
+      text-align:center;width:100%;
+    }
+    .ang-label{font-size:.75rem;color:var(--dim)}
+    .ang-value{font-size:2.2rem;font-weight:900;color:#fbbf24;letter-spacing:1px}
+
+    .angle-presets{
+      display:flex;flex-wrap:wrap;gap:6px;
+      justify-content:center;width:100%;
+    }
+    .preset-btn{
+      padding:6px 13px;border-radius:8px;
+      border:1.5px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.05);
+      color:var(--text);font-family:inherit;
+      font-size:.88rem;font-weight:700;cursor:pointer;
+      transition:all .15s;
+    }
+    .preset-btn:hover{border-color:#fbbf24;color:#fbbf24}
+    .preset-btn.active{background:rgba(251,191,36,.14);border-color:#fbbf24;color:#fbbf24}
+
+    .canvas-legend{
+      display:flex;flex-wrap:wrap;gap:10px 18px;
+      justify-content:center;
+    }
+    .leg-trig{display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--dim)}
+    .leg-trig-line{width:22px;height:3px;border-radius:2px;flex-shrink:0}
+
+    /* ── info column ── */
+    .trig-info-col{
+      flex:1;min-width:280px;
+      display:flex;flex-direction:column;gap:14px;
+    }
+
+    .trig-intro{
+      background:rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.1);
+      border-radius:12px;padding:14px 16px;
+      font-size:.9rem;line-height:1.75;color:var(--dim);
+    }
+    .trig-intro strong{color:var(--text)}
+
+    /* function cards */
+    .fn-card{
+      border-radius:14px;padding:16px 18px;border:2px solid;
+      display:flex;flex-direction:column;gap:10px;
+    }
+    .fn-card.sin-card{border-color:rgba(52,211,153,.45);background:rgba(52,211,153,.06)}
+    .fn-card.cos-card{border-color:rgba(96,165,250,.45);background:rgba(96,165,250,.06)}
+    .fn-card.tan-card{border-color:rgba(251,146,60,.45);background:rgba(251,146,60,.06)}
+
+    .fn-header{display:flex;align-items:center;gap:10px}
+    .fn-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+    .fn-title{display:flex;flex-direction:column;gap:1px}
+    .fn-name{font-size:1.05rem;font-weight:900}
+    .fn-name-sub{font-size:.75rem;color:var(--dim)}
+
+    .fn-value-row{
+      display:flex;align-items:center;justify-content:space-between;gap:10px;
+    }
+    .fn-value-big{
+      font-size:1.9rem;font-weight:900;
+      padding:6px 16px;border-radius:10px;
+      background:rgba(0,0,0,.25);letter-spacing:1px;
+      min-width:110px;text-align:center;
+      font-variant-numeric:tabular-nums;
+    }
+    .fn-formula{
+      display:flex;align-items:center;gap:8px;
+      flex-wrap:wrap;font-size:.88rem;
+    }
+    .fn-frac{
+      display:inline-flex;flex-direction:column;
+      align-items:center;font-size:.85rem;font-weight:700;
+    }
+    .fn-frac .num{border-bottom:2px solid currentColor;padding:1px 7px}
+    .fn-frac .den{padding:1px 7px}
+    .fn-desc{font-size:.8rem;color:var(--dim);line-height:1.6}
+
+    /* memory card */
+    .memory-card{
+      background:rgba(167,139,250,.07);
+      border:2px solid rgba(167,139,250,.3);
+      border-radius:14px;padding:16px 18px;
+    }
+    .memory-title{font-size:.88rem;font-weight:900;color:#a78bfa;margin-bottom:12px}
+    .memory-chips{display:flex;gap:8px;flex-wrap:wrap}
+    .memory-chip{
+      flex:1;min-width:90px;
+      padding:10px 8px;border-radius:10px;
+      background:rgba(0,0,0,.25);text-align:center;
+      display:flex;flex-direction:column;gap:4px;
+    }
+    .mc-name{font-size:.95rem;font-weight:900}
+    .mc-eq{font-size:.72rem;color:rgba(255,255,255,.45);margin-top:2px}
+
+    /* identity card */
+    .identity-card{
+      background:rgba(255,255,255,.04);
+      border:1.5px solid rgba(255,255,255,.1);
+      border-radius:14px;padding:14px 18px;
+    }
+    .identity-title{font-size:.82rem;font-weight:900;color:var(--dim);margin-bottom:10px;letter-spacing:.5px;text-transform:uppercase}
+    .identity-row{
+      display:flex;align-items:center;gap:8px;
+      padding:7px 10px;border-radius:8px;
+      background:rgba(0,0,0,.2);margin-bottom:6px;
+      font-size:.9rem;font-weight:700;
+    }
+    .id-badge{
+      font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:6px;
+      background:rgba(255,255,255,.08);color:var(--dim);flex-shrink:0;
+    }
+
+    @media(max-width:780px){
+      .trig-canvas-col{flex:0 0 100%}
+      #trig-canvas{width:100%;height:auto;aspect-ratio:1}
+    }
+  </style>
+</head>
+<body>
+
+<header class="portal-header">
+  <a href="math.html" class="portal-header-back">← رجوع</a>
+  <a href="trig-3d.html" class="portal-header-back" style="border-color:rgba(126,150,250,.45);color:#a5b8fc">🥽 النسخة الغامرة 3D</a>
+  <img src="images/logos/logo.png" alt="EDAMA" class="portal-logo-img"/>
+  <div class="portal-logo-wrap">
+    <div class="portal-logo">EDAMA <span>Virtual Technology</span></div>
+    <div class="portal-tagline">رياضيات — المثلثات وعلاقاتها</div>
+  </div>
+</header>
+
+<div class="trig-main">
+
+  <!-- ══ CANVAS COLUMN ══ -->
+  <div class="trig-canvas-col">
+
+    <canvas id="trig-canvas" width="380" height="380"></canvas>
+
+    <div class="angle-display">
+      <div class="ang-label">الزاوية الحالية θ</div>
+      <div class="ang-value" id="ang-val">45°</div>
+    </div>
+
+    <div class="angle-presets">
+      <button class="preset-btn" onclick="setAngle(0)">0°</button>
+      <button class="preset-btn" onclick="setAngle(30)">30°</button>
+      <button class="preset-btn active" onclick="setAngle(45)">45°</button>
+      <button class="preset-btn" onclick="setAngle(60)">60°</button>
+      <button class="preset-btn" onclick="setAngle(90)">90°</button>
+      <button class="preset-btn" onclick="setAngle(120)">120°</button>
+      <button class="preset-btn" onclick="setAngle(150)">150°</button>
+      <button class="preset-btn" onclick="setAngle(180)">180°</button>
+      <button class="preset-btn" onclick="setAngle(270)">270°</button>
+    </div>
+
+    <div class="canvas-legend">
+      <div class="leg-trig"><div class="leg-trig-line" style="background:rgba(255,255,255,.65)"></div>الوتر (r=1)</div>
+      <div class="leg-trig"><div class="leg-trig-line" style="background:#60a5fa"></div>جيب التمام</div>
+      <div class="leg-trig"><div class="leg-trig-line" style="background:#34d399"></div>الجيب</div>
+      <div class="leg-trig"><div class="leg-trig-line" style="background:#fb923c;height:2px;border-top:1px dashed #fb923c"></div>الظل</div>
+    </div>
+
+  </div>
+
+  <!-- ══ INFO COLUMN ══ -->
+  <div class="trig-info-col">
+
+    <div class="trig-intro">
+      <strong>الفكرة الأساسية:</strong> تخيّل مثلثاً قائم الزاوية داخل دائرة نصف قطرها 1 تُسمّى <strong>دائرة الوحدة</strong>.<br/>
+      عندما تتغير الزاوية θ تتغير أضلاع المثلث، وهذا هو جوهر المثلثات.<br/>
+      <strong>اسحب النقطة البيضاء</strong> على الدائرة لترى كيف تتغير القيم!
+    </div>
+
+    <!-- sin -->
+    <div class="fn-card sin-card">
+      <div class="fn-header">
+        <div class="fn-dot" style="background:#34d399"></div>
+        <div class="fn-title">
+          <div class="fn-name" style="color:#34d399">الجيب — sin θ</div>
+          <div class="fn-name-sub">الخط الأخضر العمودي</div>
+        </div>
+      </div>
+      <div class="fn-value-row">
+        <div class="fn-value-big" id="sin-val" style="color:#34d399">0.707</div>
+        <div class="fn-formula" style="color:#34d399">
+          <span>sin θ =</span>
+          <span class="fn-frac">
+            <span class="num">المقابل</span>
+            <span class="den">الوتر</span>
+          </span>
+          <span>=</span>
+          <span class="fn-frac">
+            <span class="num">y</span>
+            <span class="den">1</span>
+          </span>
+        </div>
+      </div>
+      <div class="fn-desc">
+        في المثلث القائم: الجيب = الضلع المقابل للزاوية مقسوماً على الوتر.<br/>
+        في دائرة الوحدة: الجيب يساوي مباشرةً الإحداثي <strong style="color:#34d399">y</strong> للنقطة على الدائرة.
+      </div>
+    </div>
+
+    <!-- cos -->
+    <div class="fn-card cos-card">
+      <div class="fn-header">
+        <div class="fn-dot" style="background:#60a5fa"></div>
+        <div class="fn-title">
+          <div class="fn-name" style="color:#60a5fa">جيب التمام — cos θ</div>
+          <div class="fn-name-sub">الخط الأزرق الأفقي</div>
+        </div>
+      </div>
+      <div class="fn-value-row">
+        <div class="fn-value-big" id="cos-val" style="color:#60a5fa">0.707</div>
+        <div class="fn-formula" style="color:#60a5fa">
+          <span>cos θ =</span>
+          <span class="fn-frac">
+            <span class="num">المجاور</span>
+            <span class="den">الوتر</span>
+          </span>
+          <span>=</span>
+          <span class="fn-frac">
+            <span class="num">x</span>
+            <span class="den">1</span>
+          </span>
+        </div>
+      </div>
+      <div class="fn-desc">
+        في المثلث القائم: جيب التمام = الضلع المجاور للزاوية مقسوماً على الوتر.<br/>
+        في دائرة الوحدة: جيب التمام يساوي مباشرةً الإحداثي <strong style="color:#60a5fa">x</strong> للنقطة على الدائرة.
+      </div>
+    </div>
+
+    <!-- tan -->
+    <div class="fn-card tan-card">
+      <div class="fn-header">
+        <div class="fn-dot" style="background:#fb923c"></div>
+        <div class="fn-title">
+          <div class="fn-name" style="color:#fb923c">الظل — tan θ</div>
+          <div class="fn-name-sub">الخط البرتقالي المنقط</div>
+        </div>
+      </div>
+      <div class="fn-value-row">
+        <div class="fn-value-big" id="tan-val" style="color:#fb923c">1.000</div>
+        <div class="fn-formula" style="color:#fb923c">
+          <span>tan θ =</span>
+          <span class="fn-frac">
+            <span class="num">المقابل</span>
+            <span class="den">المجاور</span>
+          </span>
+          <span>=</span>
+          <span class="fn-frac">
+            <span class="num">sin θ</span>
+            <span class="den">cos θ</span>
+          </span>
+        </div>
+      </div>
+      <div class="fn-desc">
+        الظل = نسبة الجيب إلى جيب التمام.<br/>
+        عند <strong>θ = 90°</strong> يصبح الظل <strong style="color:#fb923c">لا نهائي ∞</strong> لأن المقام (cos 90° = 0).
+      </div>
+    </div>
+
+    <!-- memory -->
+    <div class="memory-card">
+      <div class="memory-title">💡 قاعدة سهلة للحفظ</div>
+      <div class="memory-chips">
+        <div class="memory-chip" style="border:1.5px solid rgba(52,211,153,.3)">
+          <div class="mc-name" style="color:#34d399">جيب</div>
+          <div class="mc-eq">مقابل ÷ وتر</div>
+        </div>
+        <div class="memory-chip" style="border:1.5px solid rgba(96,165,250,.3)">
+          <div class="mc-name" style="color:#60a5fa">جيب تمام</div>
+          <div class="mc-eq">مجاور ÷ وتر</div>
+        </div>
+        <div class="memory-chip" style="border:1.5px solid rgba(251,146,60,.3)">
+          <div class="mc-name" style="color:#fb923c">ظل</div>
+          <div class="mc-eq">مقابل ÷ مجاور</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- identities -->
+    <div class="identity-card">
+      <div class="identity-title">⚡ علاقات مهمة</div>
+      <div class="identity-row">
+        <span class="id-badge">هوية</span>
+        <span>sin²θ + cos²θ = 1</span>
+      </div>
+      <div class="identity-row">
+        <span class="id-badge">علاقة</span>
+        <span>tan θ = sin θ ÷ cos θ</span>
+      </div>
+      <div class="identity-row">
+        <span class="id-badge">قيم خاصة</span>
+        <span>sin 90° = 1 &nbsp;|&nbsp; cos 0° = 1 &nbsp;|&nbsp; tan 45° = 1</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+var canvas = document.getElementById('trig-canvas');
+var ctx = canvas.getContext('2d');
+var W = 380, H = 380, CX = 190, CY = 190, R = 145;
+var angle = 45;
+var dragging = false;
+
+function toRad(d){ return d * Math.PI / 180; }
+function normAngle(a){ return ((a % 360) + 360) % 360; }
+
+function draw(){
+  var a = toRad(angle);
+  var sinA = Math.sin(a);
+  var cosA = Math.cos(a);
+  var px = CX + R * cosA;
+  var py = CY - R * sinA;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // background
+  ctx.fillStyle = '#060a18';
+  ctx.fillRect(0, 0, W, H);
+
+  // subtle rings
+  [0.5, 1].forEach(function(f){
+    ctx.beginPath();
+    ctx.arc(CX, CY, R * f, 0, Math.PI * 2);
+    ctx.strokeStyle = f === 1 ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.05)';
+    ctx.lineWidth = f === 1 ? 1.5 : 1;
+    if(f === 1) ctx.setLineDash([6, 5]);
+    else ctx.setLineDash([]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  });
+
+  // axes
+  ctx.strokeStyle = 'rgba(255,255,255,.22)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(12, CY); ctx.lineTo(W - 12, CY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(CX, 12); ctx.lineTo(CX, H - 12); ctx.stroke();
+
+  // axis arrowheads
+  ctx.beginPath();
+  ctx.moveTo(W-12, CY); ctx.lineTo(W-20, CY-4); ctx.moveTo(W-12, CY); ctx.lineTo(W-20, CY+4);
+  ctx.moveTo(CX, 12); ctx.lineTo(CX-4, 20); ctx.moveTo(CX, 12); ctx.lineTo(CX+4, 20);
+  ctx.stroke();
+
+  // axis labels
+  ctx.fillStyle = 'rgba(255,255,255,.3)';
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('+1', CX + R, CY + 15);
+  ctx.fillText('-1', CX - R, CY + 15);
+  ctx.fillText('+1', CX + 18, CY - R + 5);
+  ctx.fillText('-1', CX + 18, CY + R + 5);
+  ctx.fillText('x', W - 10, CY - 8);
+  ctx.fillText('y', CX + 8, 10);
+
+  // angle arc
+  ctx.beginPath();
+  if(sinA >= 0){
+    ctx.arc(CX, CY, 34, 0, -a, false);
+  } else {
+    ctx.arc(CX, CY, 34, 0, -a, true);
+  }
+  ctx.strokeStyle = '#fbbf24';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // angle label
+  var midA = a / 2;
+  ctx.fillStyle = '#fbbf24';
+  ctx.font = 'bold 13px Tajawal, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('θ', CX + 52 * Math.cos(midA), CY - 52 * Math.sin(midA) + 4);
+
+  // ── cos line (blue horizontal) ──
+  ctx.beginPath();
+  ctx.moveTo(CX, CY);
+  ctx.lineTo(px, CY);
+  ctx.strokeStyle = '#60a5fa';
+  ctx.lineWidth = 3.5;
+  ctx.stroke();
+
+  // cos label
+  if(Math.abs(cosA) > 0.15){
+    ctx.fillStyle = '#60a5fa';
+    ctx.font = 'bold 11px Tajawal, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('cos θ', (CX + px) / 2, CY + (sinA >= 0 ? 17 : -9));
+  }
+
+  // ── sin line (green vertical) ──
+  ctx.beginPath();
+  ctx.moveTo(px, CY);
+  ctx.lineTo(px, py);
+  ctx.strokeStyle = '#34d399';
+  ctx.lineWidth = 3.5;
+  ctx.stroke();
+
+  // sin label
+  if(Math.abs(sinA) > 0.15){
+    ctx.fillStyle = '#34d399';
+    ctx.font = 'bold 11px Tajawal, sans-serif';
+    ctx.textAlign = cosA >= 0 ? 'left' : 'right';
+    ctx.fillText('sin θ', px + (cosA >= 0 ? 7 : -7), (CY + py) / 2 + 4);
+  }
+
+  // ── hypotenuse (white) ──
+  ctx.beginPath();
+  ctx.moveTo(CX, CY);
+  ctx.lineTo(px, py);
+  ctx.strokeStyle = 'rgba(255,255,255,.7)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // hypotenuse label
+  if(Math.abs(sinA) > 0.1 && Math.abs(cosA) > 0.1){
+    ctx.fillStyle = 'rgba(255,255,255,.45)';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    var labOff = sinA > 0 ? -10 : 12;
+    ctx.fillText('1', (CX + px)/2 + labOff, (CY + py)/2 + (cosA > 0 ? -6 : 6));
+  }
+
+  // ── tan line (orange dashed, at x=R) ──
+  if(Math.abs(cosA) > 0.06){
+    var tanV = sinA / cosA;
+    if(Math.abs(tanV) < 6){
+      var tanEndY = CY - R * tanV;
+      ctx.beginPath();
+      ctx.moveTo(CX + R, CY);
+      ctx.lineTo(CX + R, tanEndY);
+      ctx.strokeStyle = '#fb923c';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([5, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // tan endpoint dot
+      ctx.beginPath();
+      ctx.arc(CX + R, tanEndY, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#fb923c';
+      ctx.fill();
+
+      // tan label
+      if(Math.abs(tanV) > 0.15){
+        ctx.fillStyle = '#fb923c';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('tan', CX + R + 7, (CY + tanEndY)/2 + 4);
+      }
+
+      // dashed line from point to tan endpoint (showing connection)
+      ctx.beginPath();
+      ctx.moveTo(CX, CY);
+      ctx.lineTo(CX + R, tanEndY);
+      ctx.strokeStyle = 'rgba(251,146,60,.2)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  // ── right angle marker at foot ──
+  if(Math.abs(sinA) > 0.06 && Math.abs(cosA) > 0.06){
+    var s = 9;
+    var sx = cosA >= 0 ? -s : s;
+    var sy = sinA >= 0 ? s : -s;
+    ctx.beginPath();
+    ctx.moveTo(px + sx, CY);
+    ctx.lineTo(px + sx, CY + sy);
+    ctx.lineTo(px, CY + sy);
+    ctx.strokeStyle = 'rgba(255,255,255,.35)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  // ── point glow ──
+  var grd = ctx.createRadialGradient(px, py, 0, px, py, 20);
+  grd.addColorStop(0, 'rgba(255,255,255,.3)');
+  grd.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.beginPath();
+  ctx.arc(px, py, 20, 0, Math.PI * 2);
+  ctx.fillStyle = grd;
+  ctx.fill();
+
+  // ── draggable point ──
+  ctx.beginPath();
+  ctx.arc(px, py, 8, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  ctx.strokeStyle = '#60a5fa';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // ── update HTML ──
+  var norm = normAngle(angle);
+  document.getElementById('ang-val').textContent = Math.round(norm) + '°';
+  document.getElementById('sin-val').textContent = sinA.toFixed(3);
+  document.getElementById('cos-val').textContent = cosA.toFixed(3);
+
+  var tanVal = Math.abs(cosA) < 0.005 ? null : sinA / cosA;
+  document.getElementById('tan-val').textContent =
+    tanVal === null ? '∞' :
+    Math.abs(tanVal) > 999 ? '∞' :
+    tanVal.toFixed(3);
+
+  // update preset buttons
+  document.querySelectorAll('.preset-btn').forEach(function(b){
+    b.classList.toggle('active', Math.round(norm) === parseInt(b.textContent));
+  });
+}
+
+function setAngle(a){
+  angle = a;
+  draw();
+}
+
+function angleFromXY(x, y){
+  var deg = Math.atan2(-(y - CY), x - CX) * 180 / Math.PI;
+  return deg;
+}
+
+function getPos(e){
+  var rect = canvas.getBoundingClientRect();
+  var scaleX = canvas.width / rect.width;
+  var scaleY = canvas.height / rect.height;
+  var src = e.touches ? e.touches[0] : e;
+  return {
+    x: (src.clientX - rect.left) * scaleX,
+    y: (src.clientY - rect.top) * scaleY
+  };
+}
+
+canvas.addEventListener('mousedown', function(e){
+  dragging = true;
+  var p = getPos(e);
+  angle = angleFromXY(p.x, p.y);
+  draw();
+});
+canvas.addEventListener('mousemove', function(e){
+  if(!dragging) return;
+  var p = getPos(e);
+  angle = angleFromXY(p.x, p.y);
+  draw();
+});
+canvas.addEventListener('mouseup', function(){ dragging = false; });
+canvas.addEventListener('mouseleave', function(){ dragging = false; });
+canvas.addEventListener('touchstart', function(e){
+  e.preventDefault(); dragging = true;
+  var p = getPos(e); angle = angleFromXY(p.x, p.y); draw();
+},{passive:false});
+canvas.addEventListener('touchmove', function(e){
+  e.preventDefault(); if(!dragging) return;
+  var p = getPos(e); angle = angleFromXY(p.x, p.y); draw();
+},{passive:false});
+canvas.addEventListener('touchend', function(){ dragging = false; });
+
+window.setAngle = setAngle;
+draw();
+})();
+</script>
+
+</body>
+</html>

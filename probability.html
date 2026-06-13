@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>الاحتمالات — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<style>
+body{overflow-x:hidden}
+.pb-wrap{max-width:950px;margin:0 auto;padding:16px 16px 60px;display:flex;gap:18px;flex-wrap:wrap}
+.pb-sidebar{flex:0 0 280px;display:flex;flex-direction:column;gap:12px}
+.pb-main{flex:1;min-width:280px;display:flex;flex-direction:column;gap:14px}
+.ctrl-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px}
+.ctrl-title{font-size:.75rem;color:var(--dim);font-weight:700;margin-bottom:10px;letter-spacing:.5px}
+.type-tabs{display:flex;gap:6px;margin-bottom:10px}
+.type-tab{flex:1;padding:8px;border-radius:8px;border:1.5px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:var(--dim);font-family:inherit;font-size:.88rem;font-weight:700;cursor:pointer;transition:all .15s;text-align:center}
+.type-tab.active{border-color:#60a5fa;background:rgba(96,165,250,.12);color:#60a5fa}
+.roll-count-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.rc-btn{flex:1;padding:7px;border-radius:7px;border:1.5px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:var(--text);font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;transition:all .15s}
+.rc-btn:hover,.rc-btn.active{border-color:#60a5fa;color:#60a5fa;background:rgba(96,165,250,.08)}
+.big-btn{width:100%;padding:13px;border-radius:10px;border:none;font-family:inherit;font-size:1rem;font-weight:900;cursor:pointer;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;transition:opacity .18s;margin-bottom:6px}
+.big-btn:hover{opacity:.88}
+.reset-btn{width:100%;padding:9px;border-radius:9px;border:1.5px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:var(--dim);font-family:inherit;font-size:.88rem;font-weight:700;cursor:pointer}
+.reset-btn:hover{border-color:#ef4444;color:#ef4444}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat-box{background:rgba(0,0,0,.25);border-radius:9px;padding:10px;text-align:center}
+.stat-label{font-size:.7rem;color:var(--dim);margin-bottom:3px}
+.stat-val{font-size:1.2rem;font-weight:900;color:#60a5fa}
+#chart-cv{background:#060a18;border-radius:14px;border:1.5px solid rgba(255,255,255,.1);display:block;width:100%}
+.recent-rolls{display:flex;flex-wrap:wrap;gap:5px;max-height:72px;overflow:hidden;padding:10px 14px;background:rgba(255,255,255,.03);border-radius:10px;border:1px solid rgba(255,255,255,.06)}
+.roll-chip{padding:3px 9px;border-radius:6px;font-size:.8rem;font-weight:700;background:rgba(96,165,250,.12);color:#60a5fa}
+.theory-box{background:rgba(167,139,250,.07);border:1.5px solid rgba(167,139,250,.2);border-radius:12px;padding:14px;font-size:.83rem;color:var(--dim);line-height:1.75}
+.theory-box strong{color:var(--text)}
+@media(max-width:700px){.pb-sidebar{flex:0 0 100%}}
+</style>
+</head>
+<body>
+<header class="portal-header">
+  <a href="math.html" class="portal-header-back">← رجوع</a>
+  <a href="probability-3d.html" class="portal-header-back" style="border-color:rgba(126,150,250,.45);color:#a5b8fc">🥽 النسخة الغامرة 3D</a>
+  <img src="images/logos/logo.png" alt="EDAMA" class="portal-logo-img"/>
+  <div class="portal-logo-wrap">
+    <div class="portal-logo">EDAMA <span>Virtual Technology</span></div>
+    <div class="portal-tagline">رياضيات — الاحتمالات</div>
+  </div>
+</header>
+<div class="pb-wrap">
+  <div class="pb-sidebar">
+    <div class="ctrl-card">
+      <div class="ctrl-title">نوع التجربة</div>
+      <div class="type-tabs">
+        <button class="type-tab active" id="tab-coin" onclick="setType('coin')">🪙 عملة</button>
+        <button class="type-tab" id="tab-dice" onclick="setType('dice')">🎲 نرد</button>
+        <button class="type-tab" id="tab-dice2" onclick="setType('dice2')">🎲🎲 نردان</button>
+      </div>
+      <div class="ctrl-title" style="margin-top:8px">عدد الرميات</div>
+      <div class="roll-count-row">
+        <button class="rc-btn active" id="rc-1" onclick="setCount(1,this)">1</button>
+        <button class="rc-btn" id="rc-10" onclick="setCount(10,this)">10</button>
+        <button class="rc-btn" id="rc-100" onclick="setCount(100,this)">100</button>
+        <button class="rc-btn" id="rc-1000" onclick="setCount(1000,this)">1000</button>
+      </div>
+      <button class="big-btn" onclick="doRoll()">🎲 ارمِ!</button>
+      <button class="reset-btn" onclick="doReset()">↺ إعادة</button>
+    </div>
+    <div class="ctrl-card">
+      <div class="ctrl-title">الإحصائيات</div>
+      <div class="stats-grid" id="stats-grid"></div>
+    </div>
+    <div class="theory-box" id="theory-box"></div>
+  </div>
+  <div class="pb-main">
+    <canvas id="chart-cv" width="560" height="340"></canvas>
+    <div class="recent-rolls" id="recent-rolls"><span style="color:var(--dim);font-size:.8rem">الرميات الأخيرة ستظهر هنا...</span></div>
+  </div>
+</div>
+<script>
+(function(){
+var cv=document.getElementById('chart-cv'),ctx=cv.getContext('2d');
+var W=560,H=340;
+var type='coin',rollCount=1,results={};
+var totalRolls=0,recentList=[];
+
+function setType(t){
+  type=t;
+  ['coin','dice','dice2'].forEach(function(x){
+    document.getElementById('tab-'+x).classList.toggle('active',x===t);
+  });
+  doReset();
+}
+function setCount(n,btn){
+  rollCount=n;
+  document.querySelectorAll('.rc-btn').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+}
+
+function getOutcomes(){
+  if(type==='coin')return['صورة','كتابة'];
+  if(type==='dice')return[1,2,3,4,5,6];
+  var arr=[];for(var i=2;i<=12;i++)arr.push(i);return arr;
+}
+function rollOne(){
+  if(type==='coin')return Math.random()<0.5?'صورة':'كتابة';
+  if(type==='dice')return Math.floor(Math.random()*6)+1;
+  return Math.floor(Math.random()*6)+1+Math.floor(Math.random()*6)+1;
+}
+function theoreticalProb(outcome){
+  if(type==='coin')return 0.5;
+  if(type==='dice')return 1/6;
+  var n=parseInt(outcome),ways=0;
+  for(var i=1;i<=6;i++)for(var j=1;j<=6;j++)if(i+j===n)ways++;
+  return ways/36;
+}
+
+function doRoll(){
+  for(var i=0;i<rollCount;i++){
+    var r=rollOne();
+    results[r]=(results[r]||0)+1;
+    totalRolls++;
+    recentList.unshift(r);if(recentList.length>40)recentList.pop();
+  }
+  render();
+}
+function doReset(){results={};totalRolls=0;recentList=[];render();}
+
+function render(){
+  var outcomes=getOutcomes();
+  // recent rolls
+  var rr=document.getElementById('recent-rolls');
+  if(recentList.length===0){rr.innerHTML='<span style="color:var(--dim);font-size:.8rem">الرميات الأخيرة ستظهر هنا...</span>';return;}
+  rr.innerHTML=recentList.slice(0,30).map(function(r){return'<span class="roll-chip">'+r+'</span>';}).join('');
+  // stats
+  var total=totalRolls;
+  var statsHtml='';
+  if(type==='coin'){
+    var h=results['صورة']||0,t2=results['كتابة']||0;
+    statsHtml='<div class="stat-box"><div class="stat-label">صورة</div><div class="stat-val">'+h+'</div></div>'+
+      '<div class="stat-box"><div class="stat-label">كتابة</div><div class="stat-val">'+t2+'</div></div>'+
+      '<div class="stat-box"><div class="stat-label">% صورة</div><div class="stat-val">'+(total?Math.round(h/total*100)+'%':'—')+'</div></div>'+
+      '<div class="stat-box"><div class="stat-label">إجمالي</div><div class="stat-val">'+total+'</div></div>';
+  }else{
+    var vals=outcomes.map(function(o){return results[o]||0;});
+    var maxV=Math.max.apply(null,vals),minV=Math.min.apply(null,vals.filter(function(v){return v>0;})||[0]);
+    var modeO=outcomes[vals.indexOf(maxV)];
+    statsHtml='<div class="stat-box"><div class="stat-label">إجمالي</div><div class="stat-val">'+total+'</div></div>'+
+      '<div class="stat-box"><div class="stat-label">الأكثر ظهوراً</div><div class="stat-val">'+(total?modeO:'—')+'</div></div>'+
+      '<div class="stat-box"><div class="stat-label">أعلى تكرار</div><div class="stat-val">'+maxV+'</div></div>'+
+      '<div class="stat-box"><div class="stat-label">أدنى تكرار</div><div class="stat-val">'+(total?minV:'—')+'</div></div>';
+  }
+  document.getElementById('stats-grid').innerHTML=statsHtml;
+  // theory
+  var theoryHtml='<strong>الاحتمال النظري:</strong><br/>';
+  if(type==='coin')theoryHtml+='P(صورة) = P(كتابة) = ½ = 50%';
+  else if(type==='dice')theoryHtml+='P(أي وجه) = 1/6 ≈ 16.7%';
+  else theoryHtml+='P(7) = 6/36 ≈ 16.7% (الأكثر احتمالاً)<br/>P(2) = P(12) = 1/36 ≈ 2.8%';
+  theoryHtml+='<br/><br/>مع زيادة عدد الرميات، يقترب الاحتمال التجريبي من النظري <strong>قانون الأعداد الكبيرة</strong>';
+  document.getElementById('theory-box').innerHTML=theoryHtml;
+  // chart
+  drawChart(outcomes,total);
+}
+
+function drawChart(outcomes,total){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#060a18';ctx.fillRect(0,0,W,H);
+  var pad={t:20,r:20,b:40,l:50};
+  var cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
+  var n=outcomes.length;
+  var barW=Math.min(50,cw/n*.7);
+  var gap=(cw-barW*n)/(n+1);
+  var maxE=Math.max.apply(null,outcomes.map(function(o){return results[o]||0;}));
+  var maxT=outcomes.reduce(function(m,o){return Math.max(m,theoreticalProb(o)*total);},0);
+  var maxVal=Math.max(maxE,maxT,1)*1.15;
+  // grid
+  ctx.strokeStyle='rgba(255,255,255,.07)';ctx.lineWidth=1;
+  for(var g=0;g<=4;g++){
+    var yg=pad.t+ch*(1-g/4);
+    ctx.beginPath();ctx.moveTo(pad.l,yg);ctx.lineTo(pad.l+cw,yg);ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.3)';ctx.font='9px sans-serif';ctx.textAlign='right';
+    ctx.fillText(Math.round(maxVal*g/4),pad.l-4,yg+3);
+  }
+  // baseline
+  ctx.strokeStyle='rgba(255,255,255,.2)';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(pad.l,pad.t+ch);ctx.lineTo(pad.l+cw,pad.t+ch);ctx.stroke();
+  // bars
+  outcomes.forEach(function(o,i){
+    var exp=results[o]||0;
+    var th=theoreticalProb(o)*total;
+    var x=pad.l+gap+(barW+gap)*i;
+    // theoretical bar (faint)
+    if(total>0){
+      var thH=ch*(th/maxVal);
+      ctx.fillStyle='rgba(251,191,36,.18)';
+      ctx.beginPath();ctx.roundRect(x,pad.t+ch-thH,barW,thH,3);ctx.fill();
+    }
+    // experimental bar
+    var expH=exp>0?ch*(exp/maxVal):0;
+    var deviation=total>0?Math.abs(exp/total-theoreticalProb(o)):0;
+    var col=deviation<0.05?'#34d399':deviation<0.12?'#60a5fa':'#fb923c';
+    var gr=ctx.createLinearGradient(0,pad.t+ch-expH,0,pad.t+ch);
+    gr.addColorStop(0,col);gr.addColorStop(1,col.replace('a5','53'));
+    ctx.fillStyle=gr;
+    if(expH>0){ctx.beginPath();ctx.roundRect(x,pad.t+ch-expH,barW,expH,3);ctx.fill();}
+    // label
+    ctx.fillStyle='rgba(255,255,255,.55)';ctx.font='bold '+(n>8?9:10)+'px sans-serif';ctx.textAlign='center';
+    ctx.fillText(o,x+barW/2,pad.t+ch+14);
+    if(exp>0){ctx.fillStyle='rgba(255,255,255,.7)';ctx.font='bold 9px sans-serif';ctx.fillText(exp,x+barW/2,pad.t+ch-expH-4);}
+  });
+  // legend
+  ctx.fillStyle='rgba(52,211,153,.8)';ctx.fillRect(pad.l,H-8,14,6);
+  ctx.fillStyle='rgba(255,255,255,.4)';ctx.font='9px sans-serif';ctx.textAlign='left';ctx.fillText('تجريبي',pad.l+17,H-3);
+  ctx.fillStyle='rgba(251,191,36,.5)';ctx.fillRect(pad.l+80,H-8,14,6);
+  ctx.fillStyle='rgba(255,255,255,.4)';ctx.fillText('نظري',pad.l+97,H-3);
+}
+
+window.setType=setType;window.setCount=setCount;window.doRoll=doRoll;window.doReset=doReset;
+render();
+})();
+</script>
+</body>
+</html>

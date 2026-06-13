@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<title>منخل الأعداد الأولية الغامر — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<link rel="stylesheet" href="css/xrlab.css"/>
+</head>
+<body>
+
+<div id="scene"></div>
+
+<header class="hud-header">
+  <a href="math.html" class="hud-back">← رجوع</a>
+  <div class="hud-title">🔢 منخل إراتوستينس <span>الغامر</span></div>
+  <a href="primes.html" class="hud-2d">📊 الوضع المبسّط 2D</a>
+</header>
+
+<div class="hint glass" id="hint">شاهد المنخل يصطاد الأعداد الأولية — الذهبية هي الناجية 🏆</div>
+
+<div class="side-panel">
+  <div class="glass sp-section">
+    <div class="sp-title">الإعدادات</div>
+    <div class="sp-row">
+      <span class="sp-name">حتى العدد</span>
+      <input class="sp-slider" type="range" id="maxn" min="50" max="200" step="10" value="100"/>
+      <span class="sp-val" id="maxn-v">100</span>
+    </div>
+    <div class="sp-row">
+      <span class="sp-name">السرعة</span>
+      <input class="sp-slider" type="range" id="speed" min="1" max="10" step="1" value="4"/>
+      <span class="sp-val" id="speed-v">4</span>
+    </div>
+    <button class="sp-btn" id="btn-run">▶ ابدأ المنخل</button>
+    <div style="height:8px"></div>
+    <button class="sp-btn secondary" id="btn-reset">↺ إعادة</button>
+  </div>
+
+  <div class="glass sp-section">
+    <div class="sp-title">الحالة</div>
+    <div class="sp-stats">
+      <div class="sp-stat"><div class="sp-stat-l">العامل الحالي</div><div class="sp-stat-v" id="cur-v" style="color:#f472b6">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l">أولية حتى الآن</div><div class="sp-stat-v" id="cnt-v" style="color:#fbbf24">0</div></div>
+    </div>
+    <div id="status-msg" style="margin-top:9px;font-size:.78rem;font-weight:700;text-align:center;color:#94a3b8">اضغط «ابدأ المنخل»</div>
+  </div>
+
+  <div class="glass sp-section">
+    <div class="sp-title">الدليل</div>
+    <div style="font-size:.74rem;color:#94a3b8;line-height:2">
+      <span style="color:#fbbf24">■</span> عدد أولي (ناجٍ)<br/>
+      <span style="color:#f472b6">■</span> العامل الحالي يفحص<br/>
+      <span style="color:#475569">■</span> مشطوب (من المضاعفات)<br/>
+      <span style="color:#60a5fa">■</span> لم يُفحص بعد
+    </div>
+  </div>
+</div>
+
+<script src="js/vendor/three.min.js"></script>
+<script src="js/vendor/OrbitControls.js"></script>
+<script src="js/vendor/VRButton.js"></script>
+<script src="js/xrlab.js"></script>
+<script>
+(function(){
+'use strict';
+
+var lab=XRLab.init({cameraPos:[0,3.4,12],target:[0,3.2,0],maxDistance:40});
+var scene=lab.scene;
+
+var COLS=10,CUBE=.62,GAP=.2;
+var maxN=100,speed=4;
+
+var COL_UNTESTED=new THREE.Color(0x2a4a9a);
+var COL_PRIME=new THREE.Color(0xfbbf24);
+var COL_CURRENT=new THREE.Color(0xf472b6);
+var COL_DEAD=new THREE.Color(0x1b2333);
+
+var wall=new THREE.Group();
+scene.add(wall);
+
+var cubes=[],labels=[];
+var boxGeo=new THREE.BoxGeometry(CUBE,CUBE,CUBE);
+
+function numTexture(n,color){
+  var cv=document.createElement('canvas');cv.width=cv.height=128;
+  var c=cv.getContext('2d');
+  c.font='900 64px Tajawal, Arial';
+  c.textAlign='center';c.textBaseline='middle';
+  c.fillStyle=color;
+  c.fillText(n,64,66);
+  return new THREE.CanvasTexture(cv);
+}
+
+function build(){
+  while(wall.children.length)wall.remove(wall.children[0]);
+  cubes=[];labels=[];
+  var rows=Math.ceil((maxN-1)/COLS);
+  var w=(CUBE+GAP)*COLS,h=(CUBE+GAP)*rows;
+  for(var n=2;n<=maxN;n++){
+    var idx=n-2;
+    var cx=(idx%COLS)-(COLS-1)/2;
+    var cy=rows-1-Math.floor(idx/COLS);
+    var mat=new THREE.MeshStandardMaterial({
+      color:COL_UNTESTED.clone(),roughness:.35,metalness:.3,
+      emissive:COL_UNTESTED.clone(),emissiveIntensity:.25,
+      transparent:true,opacity:1
+    });
+    var cube=new THREE.Mesh(boxGeo,mat);
+    cube.position.set(cx*(CUBE+GAP),1.2+cy*(CUBE+GAP),0);
+    wall.add(cube);
+    cubes[n]=cube;
+    /* number on the front face */
+    var lblMat=new THREE.SpriteMaterial({map:numTexture(n,'#dbe6ff'),transparent:true,depthWrite:false});
+    var lbl=new THREE.Sprite(lblMat);
+    lbl.scale.setScalar(.52);
+    lbl.position.set(cube.position.x,cube.position.y,CUBE/2+.08);
+    wall.add(lbl);
+    labels[n]=lbl;
+  }
+}
+
+function paint(n,colorHex,emissive,opacity){
+  var c=cubes[n];if(!c)return;
+  c.material.color.set(colorHex);
+  c.material.emissive.set(colorHex);
+  c.material.emissiveIntensity=emissive;
+  c.material.opacity=opacity!==undefined?opacity:1;
+}
+
+/* ── sieve state machine ── */
+var S=null,timer=0,running=false;
+
+function reset(){
+  running=false;S=null;
+  build();
+  document.getElementById('cur-v').textContent='—';
+  document.getElementById('cnt-v').textContent='0';
+  document.getElementById('status-msg').textContent='اضغط «ابدأ المنخل»';
+  document.getElementById('status-msg').style.color='#94a3b8';
+}
+
+function start(){
+  if(running)return;
+  if(S&&S.done)reset();
+  S={p:2,k:0,phase:'mark-prime',dead:{},primes:0,done:false};
+  running=true;
+}
+
+/* one step of the sieve animation */
+function step(){
+  if(!S||S.done)return;
+  var msg=document.getElementById('status-msg');
+
+  if(S.phase==='mark-prime'){
+    while(S.p<=maxN&&S.dead[S.p])S.p++;
+    if(S.p>maxN){
+      S.done=true;running=false;
+      msg.textContent='🏆 اكتمل! '+S.primes+' عدداً أولياً ناجياً';
+      msg.style.color='#fbbf24';
+      document.getElementById('cur-v').textContent='✓';
+      return;
+    }
+    paint(S.p,COL_PRIME.getHex(),.9);
+    cubes[S.p].scale.setScalar(1.25);
+    S.primes++;
+    document.getElementById('cur-v').textContent=S.p;
+    document.getElementById('cnt-v').textContent=S.primes;
+    msg.textContent=S.p+' أولي! نشطب الآن كل مضاعفاته…';
+    msg.style.color='#f472b6';
+    S.k=S.p*S.p;
+    S.phase=S.k>maxN?'next':'kill';
+  }
+  else if(S.phase==='kill'){
+    /* find next live multiple */
+    while(S.k<=maxN&&S.dead[S.k])S.k+=S.p;
+    if(S.k>maxN){S.phase='next';return;}
+    S.dead[S.k]=true;
+    paint(S.k,COL_DEAD.getHex(),.05,.35);
+    cubes[S.k].scale.setScalar(.8);
+    if(labels[S.k])labels[S.k].material.opacity=.25;
+    S.k+=S.p;
+    if(S.k>maxN)S.phase='next';
+  }
+  else if(S.phase==='next'){
+    cubes[S.p].scale.setScalar(1.1);
+    S.p++;
+    S.phase='mark-prime';
+  }
+}
+
+lab.onFrame(function(dt,t){
+  if(running){
+    timer+=dt*speed*6;
+    while(timer>=1){timer-=1;step();}
+  }
+  /* gentle pulse for primes found so far */
+  if(S){
+    var s=1.12+Math.sin(t*3)*.05;
+    for(var n=2;n<=maxN;n++){
+      if(cubes[n]&&!S.dead[n]&&n<S.p)cubes[n].scale.setScalar(s);
+    }
+  }
+});
+
+/* ── UI ── */
+document.getElementById('maxn').addEventListener('input',function(){
+  maxN=+this.value;
+  document.getElementById('maxn-v').textContent=maxN;
+  reset();
+});
+document.getElementById('speed').addEventListener('input',function(){
+  speed=+this.value;
+  document.getElementById('speed-v').textContent=speed;
+});
+document.getElementById('btn-run').onclick=start;
+document.getElementById('btn-reset').onclick=reset;
+lab.onSelect(function(){ if(running)running=false;else start(); });
+
+reset();
+setTimeout(function(){document.getElementById('hint').classList.add('gone');},5500);
+})();
+</script>
+</body>
+</html>

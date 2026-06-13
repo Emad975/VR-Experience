@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<title>حاسبة المثلثات المجسمة — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<link rel="stylesheet" href="css/xrlab.css"/>
+<style>
+.tri-inputs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px}
+.tri-field{display:flex;flex-direction:column;gap:3px}
+.tri-field label{font-size:.68rem;font-weight:700;color:#94a3b8;text-align:center}
+.tri-field input{
+  width:100%;padding:7px 4px;border-radius:9px;
+  background:rgba(0,0,0,.4);border:1.5px solid rgba(255,255,255,.15);
+  color:#e2e8f0;font-family:inherit;font-size:.95rem;font-weight:900;text-align:center;outline:none;
+}
+.tri-field input:focus{border-color:#60a5fa}
+.tri-err{margin-top:8px;font-size:.74rem;font-weight:700;color:#ef4444;text-align:center;min-height:1.2em}
+</style>
+</head>
+<body>
+
+<div id="scene"></div>
+
+<header class="hud-header">
+  <a href="math.html" class="hud-back">← رجوع</a>
+  <div class="hud-title">📐 حاسبة المثلثات <span>المجسمة</span></div>
+  <a href="triangle-calc.html" class="hud-2d">📊 الوضع المبسّط 2D</a>
+</header>
+
+<div class="hint glass" id="hint">أدخل أضلاعاً أو زوايا — والمثلث يُبنى أمامك بالحجم الصحيح</div>
+
+<div class="side-panel">
+  <div class="glass sp-section">
+    <div class="sp-title">طريقة الإدخال</div>
+    <div class="sp-tabs">
+      <button class="sp-tab active" data-mode="sss">SSS</button>
+      <button class="sp-tab" data-mode="sas">SAS</button>
+      <button class="sp-tab" data-mode="asa">ASA</button>
+    </div>
+    <div class="tri-inputs" id="inputs"></div>
+    <div class="tri-err" id="err"></div>
+  </div>
+
+  <div class="glass sp-section">
+    <div class="sp-title">النتائج</div>
+    <div class="sp-stats">
+      <div class="sp-stat"><div class="sp-stat-l" style="color:#60a5fa">الضلع a</div><div class="sp-stat-v" id="ra">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l" style="color:#34d399">الضلع b</div><div class="sp-stat-v" id="rb">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l" style="color:#f472b6">الضلع c</div><div class="sp-stat-v" id="rc">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l" style="color:#60a5fa">الزاوية A</div><div class="sp-stat-v" id="rA">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l" style="color:#34d399">الزاوية B</div><div class="sp-stat-v" id="rB">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l" style="color:#f472b6">الزاوية C</div><div class="sp-stat-v" id="rC">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l">المساحة</div><div class="sp-stat-v" id="rArea">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l">المحيط</div><div class="sp-stat-v" id="rPerim">—</div></div>
+    </div>
+  </div>
+</div>
+
+<script src="js/vendor/three.min.js"></script>
+<script src="js/vendor/OrbitControls.js"></script>
+<script src="js/vendor/VRButton.js"></script>
+<script src="js/xrlab.js"></script>
+<script>
+(function(){
+'use strict';
+
+var lab=XRLab.init({cameraPos:[0,3.4,9.5],target:[0,2.8,0],maxDistance:35});
+var scene=lab.scene;
+
+var grp=new THREE.Group();
+scene.add(grp);
+
+var D2R=Math.PI/180,R2D=180/Math.PI;
+
+/* ── solvers: return {a,b,c} sides, then angles via law of cosines ── */
+function solve(mode,v1,v2,v3){
+  var a,b,c;
+  if(mode==='sss'){
+    a=v1;b=v2;c=v3;
+    if(a+b<=c||b+c<=a||a+c<=b)return{err:'مجموع كل ضلعين يجب أن يتجاوز الثالث'};
+  }else if(mode==='sas'){
+    /* sides a, b with included angle C */
+    a=v1;b=v2;
+    var C=v3;
+    if(C<=0||C>=180)return{err:'الزاوية يجب أن تكون بين 0 و 180'};
+    c=Math.sqrt(a*a+b*b-2*a*b*Math.cos(C*D2R));
+  }else{
+    /* angles A, B with included side c */
+    var A=v1,B=v2;c=v3;
+    if(A<=0||B<=0||A+B>=180)return{err:'مجموع الزاويتين يجب أن يكون أقل من 180'};
+    var Cg=180-A-B;
+    a=c*Math.sin(A*D2R)/Math.sin(Cg*D2R);
+    b=c*Math.sin(B*D2R)/Math.sin(Cg*D2R);
+  }
+  if(!(a>0&&b>0&&c>0)||!isFinite(a+b+c))return{err:'قيم غير صالحة'};
+  var A2=Math.acos(Math.max(-1,Math.min(1,(b*b+c*c-a*a)/(2*b*c))))*R2D;
+  var B2=Math.acos(Math.max(-1,Math.min(1,(a*a+c*c-b*b)/(2*a*c))))*R2D;
+  var C2=180-A2-B2;
+  var s=(a+b+c)/2;
+  var area=Math.sqrt(Math.max(0,s*(s-a)*(s-b)*(s-c)));
+  return{a:a,b:b,c:c,A:A2,B:B2,C:C2,area:area,perim:a+b+c};
+}
+
+/* ── 3D rendering ── */
+var triMesh=null,edgeTubes=[],vertOrbs=[],sideLbls=[],angLbls=[];
+
+function clearTri(){
+  while(grp.children.length)grp.remove(grp.children[0]);
+  edgeTubes=[];vertOrbs=[];sideLbls=[];angLbls=[];triMesh=null;
+}
+
+var SIDE_COLS=[0x60a5fa,0x34d399,0xf472b6]; /* a, b, c */
+
+function buildTri(sol){
+  clearTri();
+  /* place: vertex A at origin-ish, B along x at distance c, C computed */
+  var A=new THREE.Vector2(0,0);
+  var B=new THREE.Vector2(sol.c,0);
+  var C=new THREE.Vector2(sol.b*Math.cos(sol.A*D2R),sol.b*Math.sin(sol.A*D2R));
+  /* fit into world: max extent → 6 units, centered, lifted */
+  var minX=Math.min(A.x,B.x,C.x),maxX=Math.max(A.x,B.x,C.x);
+  var minY=Math.min(A.y,B.y,C.y),maxY=Math.max(A.y,B.y,C.y);
+  var span=Math.max(maxX-minX,maxY-minY,.001);
+  var sc=5.6/span;
+  var cx=(minX+maxX)/2,cy=(minY+maxY)/2;
+  function W(p){return new THREE.Vector3((p.x-cx)*sc,(p.y-cy)*sc+3,0);}
+  var wA=W(A),wB=W(B),wC=W(C);
+
+  /* filled face (extruded slab) */
+  var shape=new THREE.Shape();
+  shape.moveTo((A.x-cx)*sc,(A.y-cy)*sc);
+  shape.lineTo((B.x-cx)*sc,(B.y-cy)*sc);
+  shape.lineTo((C.x-cx)*sc,(C.y-cy)*sc);
+  shape.closePath();
+  var geo=new THREE.ExtrudeGeometry(shape,{depth:.18,bevelEnabled:false});
+  geo.translate(0,3,-.09);
+  triMesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({
+    color:0x1f3a8a,roughness:.4,metalness:.3,
+    emissive:0x16308a,emissiveIntensity:.45,
+    transparent:true,opacity:.55
+  }));
+  grp.add(triMesh);
+
+  /* glowing edges: a=BC, b=AC, c=AB */
+  var edges=[[wB,wC,0],[wA,wC,1],[wA,wB,2]];
+  var sides=[sol.a,sol.b,sol.c];
+  for(var i=0;i<3;i++){
+    var p1=edges[i][0],p2=edges[i][1],ci=edges[i][2];
+    var curve=new THREE.CatmullRomCurve3([p1,p2]);
+    var tube=new THREE.Mesh(
+      new THREE.TubeGeometry(curve,4,.05,10,false),
+      new THREE.MeshStandardMaterial({color:SIDE_COLS[ci],emissive:SIDE_COLS[ci],emissiveIntensity:.75})
+    );
+    grp.add(tube);
+    edgeTubes.push(tube);
+    /* side label at midpoint, pushed outward from centroid */
+    var mid=p1.clone().add(p2).multiplyScalar(.5);
+    var cen=wA.clone().add(wB).add(wC).multiplyScalar(1/3);
+    var out=mid.clone().sub(cen).normalize().multiplyScalar(.55);
+    var lbl=lab.textSprite(['a','b','c'][ci]+' = '+fm(sides[ci]),'#'+new THREE.Color(SIDE_COLS[ci]).getHexString(),.42);
+    lbl.position.copy(mid.add(out));
+    grp.add(lbl);
+    sideLbls.push(lbl);
+  }
+
+  /* vertex orbs + angle labels */
+  var verts=[[wA,sol.A,'A'],[wB,sol.B,'B'],[wC,sol.C,'C']];
+  for(var i=0;i<3;i++){
+    var orb=new THREE.Mesh(
+      new THREE.SphereGeometry(.14,16,12),
+      new THREE.MeshStandardMaterial({color:0xfbbf24,emissive:0x7a5a00,emissiveIntensity:.9})
+    );
+    orb.position.copy(verts[i][0]);
+    grp.add(orb);
+    vertOrbs.push(orb);
+    var cen=wA.clone().add(wB).add(wC).multiplyScalar(1/3);
+    var inw=cen.clone().sub(verts[i][0]).normalize().multiplyScalar(.9);
+    var al=lab.textSprite(verts[i][2]+' = '+fm(verts[i][1])+'°','#'+new THREE.Color(SIDE_COLS[i]).getHexString(),.4);
+    al.position.copy(verts[i][0].clone().add(inw).add(new THREE.Vector3(0,0,.3)));
+    grp.add(al);
+    angLbls.push(al);
+  }
+
+  /* right-angle marker if any angle ≈ 90 */
+  [[sol.A,'A'],[sol.B,'B'],[sol.C,'C']].forEach(function(x,i){
+    if(Math.abs(x[0]-90)<.5){
+      var sq=lab.textSprite('∟ قائمة','#fbbf24',.36);
+      sq.position.copy(verts[i][0].clone().add(new THREE.Vector3(0,-.55,.3)));
+      grp.add(sq);
+    }
+  });
+}
+
+function fm(n){return Math.round(n*100)/100;}
+
+/* ── input modes ── */
+var MODES={
+  sss:[['الضلع a','4'],['الضلع b','5'],['الضلع c','6']],
+  sas:[['الضلع a','5'],['الضلع b','7'],['الزاوية C°','60']],
+  asa:[['الزاوية A°','50'],['الزاوية B°','60'],['الضلع c','8']]
+};
+var mode='sss';
+
+function renderInputs(){
+  var box=document.getElementById('inputs');
+  box.innerHTML='';
+  MODES[mode].forEach(function(f,i){
+    var d=document.createElement('div');
+    d.className='tri-field';
+    d.innerHTML='<label>'+f[0]+'</label><input type="number" step="0.5" min="0.5" id="in'+i+'" value="'+f[1]+'"/>';
+    box.appendChild(d);
+  });
+  for(var i=0;i<3;i++)document.getElementById('in'+i).addEventListener('input',update);
+}
+
+function update(){
+  var v1=+document.getElementById('in0').value;
+  var v2=+document.getElementById('in1').value;
+  var v3=+document.getElementById('in2').value;
+  var sol=solve(mode,v1,v2,v3);
+  var errEl=document.getElementById('err');
+  if(sol.err){
+    errEl.textContent='⚠ '+sol.err;
+    return;
+  }
+  errEl.textContent='';
+  buildTri(sol);
+  document.getElementById('ra').textContent=fm(sol.a);
+  document.getElementById('rb').textContent=fm(sol.b);
+  document.getElementById('rc').textContent=fm(sol.c);
+  document.getElementById('rA').textContent=fm(sol.A)+'°';
+  document.getElementById('rB').textContent=fm(sol.B)+'°';
+  document.getElementById('rC').textContent=fm(sol.C)+'°';
+  document.getElementById('rArea').textContent=fm(sol.area);
+  document.getElementById('rPerim').textContent=fm(sol.perim);
+}
+
+document.querySelectorAll('.sp-tab').forEach(function(tab){
+  tab.onclick=function(){
+    document.querySelectorAll('.sp-tab').forEach(function(t){t.classList.remove('active');});
+    tab.classList.add('active');
+    mode=tab.dataset.mode;
+    renderInputs();
+    update();
+  };
+});
+
+/* VR trigger: random valid triangle */
+lab.onSelect(function(){
+  var a=2+Math.random()*8,b=2+Math.random()*8;
+  var c=Math.abs(a-b)+.5+Math.random()*(a+b-Math.abs(a-b)-1);
+  mode='sss';
+  document.querySelectorAll('.sp-tab').forEach(function(t){t.classList.toggle('active',t.dataset.mode==='sss');});
+  renderInputs();
+  document.getElementById('in0').value=fm(a);
+  document.getElementById('in1').value=fm(b);
+  document.getElementById('in2').value=fm(c);
+  update();
+});
+
+lab.onFrame(function(dt,t){
+  grp.rotation.y=Math.sin(t*.3)*.25;
+  for(var i=0;i<vertOrbs.length;i++)
+    vertOrbs[i].scale.setScalar(1+Math.sin(t*3+i*2)*.15);
+});
+
+renderInputs();
+update();
+setTimeout(function(){document.getElementById('hint').classList.add('gone');},5500);
+})();
+</script>
+</body>
+</html>
