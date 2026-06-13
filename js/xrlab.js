@@ -376,11 +376,9 @@ function buildPanel(env){
   border.position.set(0,(-totalH/2),-0.003);
   group.add(border);
 
-  /* anchor: wrist-mounted on controller 0, tilted toward the face */
-  group.scale.setScalar(1);
-  group.position.set(0.0,0.045,-0.07);
-  group.rotation.set(-Math.PI*0.42,0,0);
-  group.translateY(totalH*0.5);   /* center vertically on anchor */
+  /* center content vertically around the group origin
+     (the panel is world-anchored in front of the user and faces them) */
+  for(var ci2=0;ci2<group.children.length;ci2++)group.children[ci2].position.y+=totalH*0.5;
 
   return {
     group:group,
@@ -466,15 +464,29 @@ function init(opts){
   /* audio */
   var audio=makeAudio();
 
-  /* zoom — scales the world group around the controls target */
+  /* zoom — scales the world group around the controls target —
+     plus a VR spawn offset that pushes the content in front of the
+     user (who starts at the world origin) so they face the whole
+     shape from a comfortable distance instead of standing inside it. */
   var zoomState=1;
   var pivot=new THREE.Vector3(ct[0],ct[1],ct[2]);
-  function applyZoom(){
+  var camVec=new THREE.Vector3(cp[0],cp[1],cp[2]);
+  var vrOffset=new THREE.Vector3(0,0,0);
+  function applyTransform(){
     world.scale.setScalar(zoomState);
-    world.position.copy(pivot).multiplyScalar(1-zoomState);
+    world.position.copy(pivot).multiplyScalar(1-zoomState).add(vrOffset);
   }
-  function zoomBy(f){zoomState=Math.max(0.2,Math.min(4,zoomState*f));applyZoom();}
-  function zoomReset(){zoomState=1;applyZoom();}
+  function zoomBy(f){zoomState=Math.max(0.2,Math.min(4,zoomState*f));applyTransform();}
+  function zoomReset(){zoomState=1;applyTransform();}
+  function vrSpawn(on){
+    if(on){
+      /* match the author's framing distance (eased for VR's wider FOV),
+         place the look-at target straight ahead of the user */
+      var d=Math.max(2.5,Math.min(6.5,camVec.distanceTo(pivot)*0.72));
+      vrOffset.set(-pivot.x,0,-d-pivot.z);
+    }else vrOffset.set(0,0,0);
+    applyTransform();
+  }
 
   /* XR controllers with laser pointers */
   var controllers=[];
@@ -490,10 +502,12 @@ function init(opts){
 
   /* ── VR control panel (built on first session start) ── */
   var panel=null;
+  var PANEL_SCALE=2.0, placePanelCountdown=0;
   var raycaster=new THREE.Raycaster();
   var dragSlider=null,dragController=null;
   var hoverMesh=null;
   var tmpMat=new THREE.Matrix4();
+  var _hp=new THREE.Vector3(),_q=new THREE.Quaternion(),_fwd=new THREE.Vector3();
 
   function controllerRay(controller){
     tmpMat.identity().extractRotation(controller.matrixWorld);
@@ -502,7 +516,7 @@ function init(opts){
     return {origin:origin,dir:dir};
   }
   function pickUI(controller){
-    if(!panel)return null;
+    if(!panel||!panel.group.visible)return null;
     var r=controllerRay(controller);
     raycaster.set(r.origin,r.dir);
     var hits=raycaster.intersectObjects(panel.targets,false);
@@ -512,18 +526,21 @@ function init(opts){
   function ensurePanel(){
     if(panel)return;
     panel=buildPanel({renderer:renderer,audio:audio,zoom:zoomBy,zoomReset:zoomReset});
-    /* attach to controller 0 (wrist menu); point with the other hand */
-    controllers[0].add(panel.group);
+    panel.group.scale.setScalar(PANEL_SCALE);
+    scene.add(panel.group);   /* world-anchored, faces the user */
   }
 
   renderer.xr.addEventListener('sessionstart',function(){
     audio.resume();
     ensurePanel();
-    if(panel)panel.group.visible=true;
+    if(panel)panel.group.visible=false;   /* shown once the head pose is known */
+    placePanelCountdown=3;
+    vrSpawn(true);    /* push content in front of the user */
     zoomReset();
   });
   renderer.xr.addEventListener('sessionend',function(){
     if(panel)panel.group.visible=false;
+    vrSpawn(false);   /* restore desktop framing */
     zoomReset();
   });
 
@@ -561,33 +578,51 @@ function init(opts){
 
     /* VR panel interaction */
     if(panel&&renderer.xr.isPresenting){
-      /* slider drag */
-      if(dragSlider&&dragController){
-        var r=controllerRay(dragController);
-        raycaster.set(r.origin,r.dir);
-        var hh=raycaster.intersectObject(dragSlider,false);
-        if(hh.length){
-          var lp=dragSlider.worldToLocal(hh[0].point.clone());
-          dragSlider.userData.setFromLocalX(lp.x);
+      _hp.setFromMatrixPosition(camera.matrixWorld);
+      /* place the panel a few frames in, once the head pose is tracked */
+      if(placePanelCountdown>0){
+        placePanelCountdown--;
+        if(placePanelCountdown===0){
+          _q.setFromRotationMatrix(camera.matrixWorld);
+          _fwd.set(0,0,-1).applyQuaternion(_q);_fwd.y=0;
+          if(_fwd.lengthSq()<1e-5)_fwd.set(0,0,-1);
+          _fwd.normalize();
+          panel.group.position.copy(_hp).addScaledVector(_fwd,1.25);
+          panel.group.position.y=_hp.y-0.32;
+          panel.group.rotation.x=0.12;
+          panel.group.visible=true;
         }
       }
-      /* hover (use controller 1 — the free hand) */
-      var hoverCtrl=controllers[1];
-      var h=pickUI(hoverCtrl)||pickUI(controllers[0]);
-      var nh=h?h.object:null;
-      if(nh!==hoverMesh){hoverMesh=nh;panel.redrawAll(hoverMesh);}
-      /* thumbstick zoom (axes[3]) */
-      var sess=renderer.xr.getSession();
-      if(sess&&sess.inputSources){
-        for(var s=0;s<sess.inputSources.length;s++){
-          var gp=sess.inputSources[s].gamepad;
-          if(gp&&gp.axes&&gp.axes.length>=4){
-            var ay=gp.axes[3];
-            if(Math.abs(ay)>0.25)zoomBy(1-ay*dt*1.4);
+      if(panel.group.visible){
+        /* always face the user (yaw only) */
+        panel.group.rotation.y=Math.atan2(_hp.x-panel.group.position.x,_hp.z-panel.group.position.z);
+        /* slider drag */
+        if(dragSlider&&dragController){
+          var r=controllerRay(dragController);
+          raycaster.set(r.origin,r.dir);
+          var hh=raycaster.intersectObject(dragSlider,false);
+          if(hh.length){
+            var lp=dragSlider.worldToLocal(hh[0].point.clone());
+            dragSlider.userData.setFromLocalX(lp.x);
           }
         }
+        /* hover — either hand's laser */
+        var h=pickUI(controllers[1])||pickUI(controllers[0]);
+        var nh=h?h.object:null;
+        if(nh!==hoverMesh){hoverMesh=nh;panel.redrawAll(hoverMesh);}
+        /* thumbstick zoom (axes[3]) */
+        var sess=renderer.xr.getSession();
+        if(sess&&sess.inputSources){
+          for(var s=0;s<sess.inputSources.length;s++){
+            var gp=sess.inputSources[s].gamepad;
+            if(gp&&gp.axes&&gp.axes.length>=4){
+              var ay=gp.axes[3];
+              if(Math.abs(ay)>0.25)zoomBy(1-ay*dt*1.4);
+            }
+          }
+        }
+        panel.tickLive();
       }
-      panel.tickLive();
     }
 
     for(var i=0;i<frameCbs.length;i++)frameCbs[i](dt,clock.elapsedTime);

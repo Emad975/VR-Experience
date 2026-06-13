@@ -47,14 +47,18 @@ var CATCOL={
 };
 function hex(c){return '#'+('000000'+c.toString(16)).slice(-6);}
 
-var lab=XRLab.init({cameraPos:[0,2.2,7.6],target:[0,2.2,0],maxDistance:34,minDistance:1.2,fog:.006});
+var lab=XRLab.init({cameraPos:[0,1.95,7.6],target:[0,1.95,0],maxDistance:22,minDistance:1.0,fog:.004});
 var scene=lab.scene;
 
-/* ───────── layout ───────── */
-var DX=0.40, DY=0.42, TILE=0.36, TOPV=5.1, CY=2.5;
+/* ───────── layout — a flat 3D wall the user faces head-on ─────────
+   Tiles are thin boxes (real depth) on a plane at z=0 facing +Z. In VR
+   xrlab pushes the whole wall in front of the user so they stand back
+   and see the entire table at once. */
+var DX=0.40, DY=0.42, TILE=0.36, TOPV=5.0, EYE=1.95, DEPTH=0.06;
 function rowVis(r){return r<=7?r:(r-0.7);}     /* gap before lanth/actini rows */
-function tileX(col){return (col-9.5)*DX;}
-function tileY(row){return CY+(TOPV-rowVis(row))*DY;}
+function tilePos(col,row){
+  return {x:(col-9.5)*DX, y:EYE+(TOPV-rowVis(row))*DY, z:0, ry:0};
+}
 
 /* ───────── tile texture ───────── */
 function tileTex(e,bright){
@@ -81,33 +85,40 @@ function tileTex(e,bright){
   return tex;
 }
 
-/* ───────── build tiles ───────── */
+/* ───────── build tiles (thin 3D boxes on the curved wall) ───────── */
 var tableGrp=new THREE.Group();scene.add(tableGrp);
 var tiles=[];
 ELEMENTS.forEach(function(e){
   var pos=POS[e.n];if(!pos)return;
   var texOn=tileTex(e,true), texOff=tileTex(e,false);
-  var mat=new THREE.MeshBasicMaterial({map:texOff,transparent:true});
-  var m=new THREE.Mesh(new THREE.PlaneGeometry(TILE,TILE),mat);
-  m.position.set(tileX(pos[1]),tileY(pos[0]),0);
-  m.userData={el:e,texOn:texOn,texOff:texOff,base:m.position.clone(),pickable:true};
+  var col=CATCOL[e.cat]||CATCOL.unknown;
+  var faceMat=new THREE.MeshBasicMaterial({map:texOff,transparent:true});
+  var sideMat=new THREE.MeshStandardMaterial({color:col,roughness:.6,metalness:.1,emissive:col,emissiveIntensity:.12});
+  /* BoxGeometry material order: +X,-X,+Y,-Y,+Z,-Z — front face is +Z */
+  var mats=[sideMat,sideMat,sideMat,sideMat,faceMat,sideMat];
+  var m=new THREE.Mesh(new THREE.BoxGeometry(TILE,TILE,DEPTH),mats);
+  var p=tilePos(pos[1],pos[0]);
+  m.position.set(p.x,p.y,p.z);
+  m.rotation.y=p.ry;
+  m.userData={el:e,texOn:texOn,texOff:texOff,face:faceMat,base:{x:p.x,y:p.y,z:p.z,ry:p.ry},pickable:true};
   tableGrp.add(m);
   tiles.push(m);
 });
 
 /* lanthanide / actinide markers in the main body (group 3, rows 6 & 7) */
-function marker(text,col,row){
-  var s=lab.textSprite(text,'#f0a',.18);
-  s.position.set(tileX(3),tileY(row),0);
+function marker(text,colr,row){
+  var s=lab.textSprite(text,colr,.18);
+  var p=tilePos(3,row);
+  s.position.set(p.x,p.y,p.z);
   tableGrp.add(s);
 }
 marker('*','#f06292',6);
 marker('**','#e57373',7);
 
-/* title above table */
+/* title above the wall */
 var ttl=lab.textSprite('الجدول الدوري للعناصر','#7dd3fc',.55);
-ttl.position.set(0,CY+TOPV*DY*0+ (TOPV-0.2)*DY+0.5,0);
-ttl.position.y=tileY(1)+0.7;
+var tp=tilePos(9.5,1);
+ttl.position.set(0,tp.y+0.75,tp.z);
 tableGrp.add(ttl);
 
 /* ───────── category legend (clickable 3D chips) ───────── */
@@ -137,8 +148,8 @@ var activeCat=null;
     var m=new THREE.Mesh(new THREE.PlaneGeometry(cw,ch),
       new THREE.MeshBasicMaterial({map:tex,transparent:true}));
     var x=(colIdx-(perRow-1)/2)*(cw+gap);
-    var y=tileY(10)-0.55-row*(ch+gap);
-    m.position.set(x,y,0);
+    var y=0.95-row*(ch+gap);
+    m.position.set(x,y,2.0);   /* floats in front of the wall, +Z faces the user */
     m.userData={cat:k,tex:tex,draw:function(a){draw(a);tex.needsUpdate=true;},pickable:true,legend:true};
     legendGrp.add(m);
     legendChips.push(m);
@@ -148,19 +159,19 @@ var activeCat=null;
 function applyFilter(){
   tiles.forEach(function(m){
     var match=!activeCat||m.userData.el.cat===activeCat;
-    m.material.opacity=match?1:0.18;
-    m.material.map=match?m.userData.texOn:m.userData.texOff;
-    m.material.needsUpdate=true;
+    m.userData.face.opacity=match?1:0.18;
+    m.userData.face.map=match?m.userData.texOn:m.userData.texOff;
+    m.userData.face.needsUpdate=true;
   });
   legendChips.forEach(function(ch){ch.userData.draw(ch.userData.cat===activeCat);});
 }
 function toggleCat(k){activeCat=activeCat===k?null:k;applyFilter();if(lab.audio)lab.audio.click();}
 
-/* ───────── atom model pod ───────── */
-var podGrp=new THREE.Group();podGrp.position.set(3.5,1.9,2.6);podGrp.scale.setScalar(0.5);scene.add(podGrp);podGrp.visible=false;
+/* ───────── atom model pod (floats in front of the wall, toward the user) ───────── */
+var podGrp=new THREE.Group();podGrp.position.set(2.3,1.7,2.6);podGrp.scale.setScalar(0.5);scene.add(podGrp);podGrp.visible=false;
 var nucleus,electronShells=[],podLabels=[];
-var atomCaption=lab.textSprite('','#9be7ff',.36);atomCaption.position.set(3.5,3.3,2.6);scene.add(atomCaption);atomCaption.visible=false;
-var infoBoard=makeInfoBoard();infoBoard.mesh.position.set(-3.4,1.95,2.4);scene.add(infoBoard.mesh);infoBoard.mesh.visible=false;
+var atomCaption=lab.textSprite('','#9be7ff',.34);atomCaption.position.set(2.3,2.95,2.6);scene.add(atomCaption);atomCaption.visible=false;
+var infoBoard=makeInfoBoard();infoBoard.mesh.position.set(-2.5,1.85,2.6);scene.add(infoBoard.mesh);infoBoard.mesh.visible=false;
 
 function clearPod(){
   while(podGrp.children.length)podGrp.remove(podGrp.children[0]);
@@ -192,13 +203,14 @@ function updateCaption(){
   }
 }
 
-var hiTile=null;
 function highlightTile(e){
   tiles.forEach(function(m){
-    var on=m.userData.el===e;
-    m.scale.setScalar(on?1.18:1);
-    m.position.z=on?0.12:0;
-    if(on)m.material.map=m.userData.texOn,m.material.needsUpdate=true;
+    var on=m.userData.el===e, b=m.userData.base;
+    m.position.set(b.x,b.y,b.z);          /* reset to base on the curved wall */
+    m.rotation.y=b.ry;
+    m.scale.setScalar(on?1.2:1);
+    if(on){m.translateZ(0.16);            /* pop toward the user along local +Z */
+      m.userData.face.map=m.userData.texOn;m.userData.face.needsUpdate=true;}
   });
 }
 
