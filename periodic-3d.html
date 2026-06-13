@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<title>الجدول الدوري الغامر — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<link rel="stylesheet" href="css/xrlab.css"/>
+</head>
+<body>
+
+<div id="scene"></div>
+
+<header class="hud-header">
+  <a href="chemistry.html" class="hud-back">← رجوع</a>
+  <div class="hud-title">🧪 الجدول الدوري <span>الغامر</span></div>
+  <a href="periodic-table.html" class="hud-2d">📊 الوضع المبسّط 2D</a>
+</header>
+
+<div class="hint glass" id="hint">🖱️ اسحب للدوران — انقر على أي عنصر لاستكشاف ذرته · داخل النظارة استخدم لوحة التحكم على يدك</div>
+
+<!-- mirrored into the in-VR control panel automatically -->
+<div class="ctl-bar glass">
+  <button class="ctl-btn on" id="btn-explore">🔍 استكشاف</button>
+  <button class="ctl-btn" id="btn-build">⚗️ بناء الذرة</button>
+  <button class="ctl-btn" id="btn-prev">◀ خطوة</button>
+  <button class="ctl-btn" id="btn-next">خطوة ▶</button>
+</div>
+
+<script src="js/vendor/three.min.js"></script>
+<script src="js/vendor/OrbitControls.js"></script>
+<script src="js/vendor/VRButton.js"></script>
+<script src="js/xrlab.js"></script>
+<script src="js/elements-data.js"></script>
+<script>
+(function(){
+'use strict';
+
+var ELEMENTS=window.PT_ELEMENTS, CAT=window.PT_CAT, POS=window.PT_POS, EL_VIS=window.PT_EL_VIS;
+var EL={};ELEMENTS.forEach(function(e){EL[e.n]=e;});
+
+/* category → color */
+var CATCOL={
+  alkali:0xff7043, alkaline:0xffca28, trans:0x64b5f6, post:0x4db6ac,
+  metalloid:0x4dd0e1, nonmetal:0x81c784, halogen:0xaed581, noble:0xba68c8,
+  lantha:0xf06292, actini:0xe57373, unknown:0x9aa4c0
+};
+function hex(c){return '#'+('000000'+c.toString(16)).slice(-6);}
+
+var lab=XRLab.init({cameraPos:[0,2.2,7.6],target:[0,2.2,0],maxDistance:34,minDistance:1.2,fog:.006});
+var scene=lab.scene;
+
+/* ───────── layout ───────── */
+var DX=0.40, DY=0.42, TILE=0.36, TOPV=5.1, CY=2.5;
+function rowVis(r){return r<=7?r:(r-0.7);}     /* gap before lanth/actini rows */
+function tileX(col){return (col-9.5)*DX;}
+function tileY(row){return CY+(TOPV-rowVis(row))*DY;}
+
+/* ───────── tile texture ───────── */
+function tileTex(e,bright){
+  var px=180,py=180;
+  var cv=document.createElement('canvas');cv.width=px;cv.height=py;
+  var c=cv.getContext('2d');
+  var col=CATCOL[e.cat]||CATCOL.unknown;
+  var r=(col>>16)&255,g=(col>>8)&255,b=col&255;
+  var a=bright?1:0.82;
+  c.fillStyle='rgba('+r+','+g+','+b+','+a+')';
+  c.fillRect(0,0,px,py);
+  var gr=c.createLinearGradient(0,0,0,py);
+  gr.addColorStop(0,'rgba(255,255,255,.25)');gr.addColorStop(.5,'rgba(0,0,0,0)');gr.addColorStop(1,'rgba(0,0,0,.28)');
+  c.fillStyle=gr;c.fillRect(0,0,px,py);
+  c.fillStyle='rgba(8,12,28,.92)';
+  c.textBaseline='top';c.textAlign='left';
+  c.font='800 26px Tajawal, Arial';c.fillText(e.n,12,8);
+  c.textAlign='center';
+  c.font='900 70px Tajawal, Arial';c.fillText(e.sym,px/2,52);
+  c.font='800 22px Tajawal, Arial';
+  var nm=e.ar.length>9?e.ar.slice(0,8)+'…':e.ar;
+  c.fillText(nm,px/2,138);
+  var tex=new THREE.CanvasTexture(cv);tex.anisotropy=4;
+  return tex;
+}
+
+/* ───────── build tiles ───────── */
+var tableGrp=new THREE.Group();scene.add(tableGrp);
+var tiles=[];
+ELEMENTS.forEach(function(e){
+  var pos=POS[e.n];if(!pos)return;
+  var texOn=tileTex(e,true), texOff=tileTex(e,false);
+  var mat=new THREE.MeshBasicMaterial({map:texOff,transparent:true});
+  var m=new THREE.Mesh(new THREE.PlaneGeometry(TILE,TILE),mat);
+  m.position.set(tileX(pos[1]),tileY(pos[0]),0);
+  m.userData={el:e,texOn:texOn,texOff:texOff,base:m.position.clone(),pickable:true};
+  tableGrp.add(m);
+  tiles.push(m);
+});
+
+/* lanthanide / actinide markers in the main body (group 3, rows 6 & 7) */
+function marker(text,col,row){
+  var s=lab.textSprite(text,'#f0a',.18);
+  s.position.set(tileX(3),tileY(row),0);
+  tableGrp.add(s);
+}
+marker('*','#f06292',6);
+marker('**','#e57373',7);
+
+/* title above table */
+var ttl=lab.textSprite('الجدول الدوري للعناصر','#7dd3fc',.55);
+ttl.position.set(0,CY+TOPV*DY*0+ (TOPV-0.2)*DY+0.5,0);
+ttl.position.y=tileY(1)+0.7;
+tableGrp.add(ttl);
+
+/* ───────── category legend (clickable 3D chips) ───────── */
+var legendGrp=new THREE.Group();scene.add(legendGrp);
+var legendChips=[];
+var catKeys=Object.keys(CAT);
+var activeCat=null;
+(function(){
+  var perRow=6, cw=1.05, ch=0.26, gap=0.06;
+  catKeys.forEach(function(k,i){
+    var row=Math.floor(i/perRow), colIdx=i%perRow;
+    var cv=document.createElement('canvas');cv.width=300;cv.height=72;
+    var c=cv.getContext('2d');
+    function draw(active){
+      var col=CATCOL[k]||CATCOL.unknown;
+      c.clearRect(0,0,300,72);
+      c.fillStyle='rgba(10,16,36,'+(active?0.95:0.8)+')';
+      c.fillRect(0,0,300,72);
+      c.fillStyle=hex(col);c.beginPath();c.arc(34,36,15,0,Math.PI*2);c.fill();
+      c.fillStyle=active?'#ffffff':'#cbd5e1';
+      c.font='800 30px Tajawal, Arial';c.textAlign='right';c.textBaseline='middle';
+      c.fillText(CAT[k].ar,286,38);
+      if(active){c.strokeStyle=hex(col);c.lineWidth=5;c.strokeRect(2,2,296,68);}
+    }
+    draw(false);
+    var tex=new THREE.CanvasTexture(cv);tex.anisotropy=4;
+    var m=new THREE.Mesh(new THREE.PlaneGeometry(cw,ch),
+      new THREE.MeshBasicMaterial({map:tex,transparent:true}));
+    var x=(colIdx-(perRow-1)/2)*(cw+gap);
+    var y=tileY(10)-0.55-row*(ch+gap);
+    m.position.set(x,y,0);
+    m.userData={cat:k,tex:tex,draw:function(a){draw(a);tex.needsUpdate=true;},pickable:true,legend:true};
+    legendGrp.add(m);
+    legendChips.push(m);
+  });
+})();
+
+function applyFilter(){
+  tiles.forEach(function(m){
+    var match=!activeCat||m.userData.el.cat===activeCat;
+    m.material.opacity=match?1:0.18;
+    m.material.map=match?m.userData.texOn:m.userData.texOff;
+    m.material.needsUpdate=true;
+  });
+  legendChips.forEach(function(ch){ch.userData.draw(ch.userData.cat===activeCat);});
+}
+function toggleCat(k){activeCat=activeCat===k?null:k;applyFilter();if(lab.audio)lab.audio.click();}
+
+/* ───────── atom model pod ───────── */
+var podGrp=new THREE.Group();podGrp.position.set(3.5,1.9,2.6);podGrp.scale.setScalar(0.5);scene.add(podGrp);podGrp.visible=false;
+var nucleus,electronShells=[],podLabels=[];
+var atomCaption=lab.textSprite('','#9be7ff',.36);atomCaption.position.set(3.5,3.3,2.6);scene.add(atomCaption);atomCaption.visible=false;
+var infoBoard=makeInfoBoard();infoBoard.mesh.position.set(-3.4,1.95,2.4);scene.add(infoBoard.mesh);infoBoard.mesh.visible=false;
+
+function clearPod(){
+  while(podGrp.children.length)podGrp.remove(podGrp.children[0]);
+  electronShells=[];
+}
+
+var selected=null, mode='explore', buildStep=0;
+
+function showElement(e){
+  selected=e;buildStep=0;
+  highlightTile(e);
+  renderPod();
+  infoBoard.set(e);
+  infoBoard.mesh.visible=true;
+  podGrp.visible=true;
+  atomCaption.visible=true;
+  if(lab.audio)lab.audio.ok();
+}
+
+var BUILD_CAP=['⭐ النواة','❎ البروتونات والنيوترونات','🟡 الأغلفة الإلكترونية'];
+function updateCaption(){
+  var e=selected;if(!e)return;
+  if(mode==='build'){
+    var maxStep=2+e.shells.length;
+    var lbl=buildStep<2?BUILD_CAP[buildStep]:('🟡 الغلاف '+(buildStep-1)+' / '+e.shells.length);
+    atomCaption.setText(e.ar+' — '+lbl,'#9be7ff');
+  }else{
+    atomCaption.setText(e.ar+' ('+e.sym+')','#9be7ff');
+  }
+}
+
+var hiTile=null;
+function highlightTile(e){
+  tiles.forEach(function(m){
+    var on=m.userData.el===e;
+    m.scale.setScalar(on?1.18:1);
+    m.position.z=on?0.12:0;
+    if(on)m.material.map=m.userData.texOn,m.material.needsUpdate=true;
+  });
+}
+
+function renderPod(){
+  clearPod();
+  var e=selected;if(!e)return;
+  var maxStep=2+e.shells.length;           /* 0 nucleus, 1 p/n, 2.. shells */
+  var step=mode==='build'?Math.min(buildStep,maxStep):maxStep;
+
+  /* nucleus */
+  var nr=0.14+Math.cbrt(e.n)*0.045;
+  var vis=EL_VIS[e.n];
+  var nucCol=0xff6b6b;
+  nucleus=new THREE.Mesh(
+    new THREE.IcosahedronGeometry(nr,2),
+    new THREE.MeshStandardMaterial({color:nucCol,emissive:0x7a1010,emissiveIntensity:.7,roughness:.4,metalness:.3})
+  );
+  podGrp.add(nucleus);
+  var glow=new THREE.Sprite(new THREE.SpriteMaterial({
+    map:lab.glowTexture('rgba(255,180,160,.9)','rgba(255,80,80,.25)'),
+    transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
+  glow.scale.setScalar(nr*5);nucleus.add(glow);
+
+  /* nucleus label (protons / neutrons) shown from step 1 */
+  if(step>=1){
+    var pl=lab.textSprite('p⁺ '+e.n+'   n⁰ '+e.neutrons,'#fca5a5',.26);
+    pl.position.set(0,-nr-0.34,0);podGrp.add(pl);
+  }
+
+  /* electron shells */
+  var shellsToShow=mode==='build'?Math.max(0,step-1):e.shells.length;
+  for(var i=0;i<e.shells.length && i<shellsToShow;i++){
+    var radius=nr+0.34+i*0.34;
+    var shell=new THREE.Group();
+    /* ring */
+    var ring=new THREE.Mesh(
+      new THREE.TorusGeometry(radius,0.006,8,80),
+      new THREE.MeshBasicMaterial({color:0x60a5fa,transparent:true,opacity:.4}));
+    ring.rotation.x=Math.PI/2*0.82;
+    ring.rotation.y=i*0.5;
+    shell.add(ring);
+    /* electrons */
+    var cnt=e.shells[i], shown=Math.min(cnt,28);
+    for(var k=0;k<shown;k++){
+      var ang=k/shown*Math.PI*2;
+      var ed=new THREE.Mesh(new THREE.SphereGeometry(0.035,10,8),
+        new THREE.MeshStandardMaterial({color:0x9be7ff,emissive:0x2563eb,emissiveIntensity:1}));
+      ed.position.set(Math.cos(ang)*radius,0,Math.sin(ang)*radius);
+      ed.position.applyEuler(ring.rotation);
+      ed.userData.ang=ang;ed.userData.radius=radius;ed.userData.tilt=ring.rotation.clone();
+      shell.add(ed);
+    }
+    shell.userData.spin=0.5-i*0.06;
+    podGrp.add(shell);
+    electronShells.push(shell);
+  }
+  updateCaption();
+}
+
+/* animate electrons + atom slow rotation */
+lab.onFrame(function(dt,t){
+  if(podGrp.visible){
+    podGrp.rotation.y+=dt*0.25;
+    electronShells.forEach(function(sh){
+      sh.children.forEach(function(ch){
+        if(ch.userData.radius!==undefined){
+          ch.userData.ang+=dt*sh.userData.spin;
+          var a=ch.userData.ang,rad=ch.userData.radius;
+          ch.position.set(Math.cos(a)*rad,0,Math.sin(a)*rad).applyEuler(ch.userData.tilt);
+        }
+      });
+    });
+    if(nucleus)nucleus.rotation.y+=dt*0.6;
+  }
+  /* gentle table breathing for liveliness */
+});
+
+/* ───────── info board ───────── */
+function makeInfoBoard(){
+  var W=1.5,H=1.7,px=520,py=590;
+  var cv=document.createElement('canvas');cv.width=px;cv.height=py;
+  var c=cv.getContext('2d');
+  var tex=new THREE.CanvasTexture(cv);tex.anisotropy=4;
+  var mesh=new THREE.Mesh(new THREE.PlaneGeometry(W,H),
+    new THREE.MeshBasicMaterial({map:tex,transparent:true}));
+  function wrap(text,x,y,maxW,lh){
+    var words=text.split(' '),line='',yy=y;
+    for(var i=0;i<words.length;i++){
+      var test=line+words[i]+' ';
+      if(c.measureText(test).width>maxW&&line){c.fillText(line.trim(),x,yy);line=words[i]+' ';yy+=lh;}
+      else line=test;
+    }
+    c.fillText(line.trim(),x,yy);return yy;
+  }
+  function set(e){
+    var cat=CAT[e.cat]||CAT.unknown;var col=CATCOL[e.cat]||CATCOL.unknown;
+    c.clearRect(0,0,px,py);
+    c.fillStyle='rgba(7,11,28,.92)';c.fillRect(0,0,px,py);
+    c.strokeStyle=hex(col);c.lineWidth=6;c.strokeRect(3,3,px-6,py-6);
+    c.textAlign='center';c.textBaseline='top';
+    c.fillStyle=hex(col);c.font='900 150px Tajawal, Arial';c.fillText(e.sym,px/2,24);
+    c.fillStyle='#e7edf7';c.font='900 46px Tajawal, Arial';c.fillText(e.ar,px/2,196);
+    c.fillStyle='#94a3b8';c.font='700 30px Tajawal, Arial';c.fillText(e.en+' · '+cat.ar,px/2,250);
+    /* stats grid */
+    c.textAlign='right';
+    var rows=[['العدد الذري',e.n],['الكتلة الذرية',e.mass],['بروتونات',e.n],
+              ['إلكترونات',e.n],['نيوترونات',e.neutrons],['الأغلفة',e.shells.join('، ')]];
+    var y0=305,lh=42;
+    rows.forEach(function(r,i){
+      var y=y0+i*lh;
+      c.fillStyle='#7dd3fc';c.font='800 28px Tajawal, Arial';c.fillText(r[0],px-26,y);
+      c.fillStyle='#e7edf7';c.textAlign='left';c.font='900 28px Tajawal, Arial';c.fillText(String(r[1]),26,y);
+      c.textAlign='right';
+    });
+    /* description */
+    c.fillStyle='#cbd5e1';c.font='600 26px Tajawal, Arial';c.textAlign='right';
+    var desc=e.desc||('عنصر '+e.ar+' من فصيلة '+cat.ar+'.');
+    wrap(desc,px-26,y0+rows.length*lh+18,px-52,34);
+    tex.needsUpdate=true;
+  }
+  return {mesh:mesh,set:set};
+}
+
+/* ───────── picking (controller + mouse) ───────── */
+var raycaster=new THREE.Raycaster();
+function pickAndAct(rc){
+  var hits=rc.intersectObjects(tiles.concat(legendChips),false);
+  if(!hits.length)return false;
+  var u=hits[0].object.userData;
+  if(u.legend)toggleCat(u.cat);
+  else if(u.el)showElement(u.el);
+  return true;
+}
+
+/* controller select (lab.onSelect fires only when VR panel NOT hit) */
+var tmpMat=new THREE.Matrix4();
+lab.onSelect(function(controller){
+  tmpMat.identity().extractRotation(controller.matrixWorld);
+  var origin=new THREE.Vector3().setFromMatrixPosition(controller.matrixWorld);
+  var dir=new THREE.Vector3(0,0,-1).applyMatrix4(tmpMat).normalize();
+  raycaster.set(origin,dir);
+  pickAndAct(raycaster);
+});
+
+/* mouse (desktop) */
+var mouse=new THREE.Vector2();
+lab.renderer.domElement.addEventListener('pointerdown',function(ev){
+  mouse.x=(ev.clientX/window.innerWidth)*2-1;
+  mouse.y=-(ev.clientY/window.innerHeight)*2+1;
+  raycaster.setFromCamera(mouse,lab.camera);
+  pickAndAct(raycaster);
+});
+
+/* ───────── mode + build controls (also mirrored into VR panel) ───────── */
+function setMode(m){
+  mode=m;
+  document.getElementById('btn-explore').classList.toggle('on',m==='explore');
+  document.getElementById('btn-build').classList.toggle('on',m==='build');
+  if(selected)renderPod();
+}
+document.getElementById('btn-explore').onclick=function(){setMode('explore');};
+document.getElementById('btn-build').onclick=function(){setMode('build');if(!selected)showElement(EL[6]);};
+document.getElementById('btn-prev').onclick=function(){if(mode!=='build')setMode('build');buildStep=Math.max(0,buildStep-1);renderPod();if(lab.audio)lab.audio.blip(330,.08,'sine',.2);};
+document.getElementById('btn-next').onclick=function(){if(mode!=='build')setMode('build');if(selected){buildStep=Math.min(2+selected.shells.length,buildStep+1);renderPod();if(lab.audio)lab.audio.blip(550,.08,'sine',.2);}};
+
+/* start with carbon shown so the pod isn't empty */
+showElement(EL[6]);
+applyFilter();
+setTimeout(function(){var h=document.getElementById('hint');if(h)h.classList.add('gone');},7000);
+})();
+</script>
+</body>
+</html>
