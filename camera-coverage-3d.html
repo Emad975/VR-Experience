@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<title>تغطية كاميرات المراقبة — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<link rel="stylesheet" href="css/xrlab.css"/>
+</head>
+<body>
+
+<div id="scene"></div>
+
+<header class="hud-header">
+  <a href="security.html" class="hud-back">← رجوع</a>
+  <div class="hud-title">📹 تغطية كاميرات <span>المراقبة</span></div>
+</header>
+
+<div class="hint glass" id="hint">🖱️ انقر كاميرا لاختيارها · غيّر الاتجاه/الزاوية/المدى من اللوحة · الأخضر مغطّى، الأحمر نقطة عمياء</div>
+
+<div class="side-panel">
+  <div class="glass sp-section">
+    <div class="sp-title">الكاميرا</div>
+    <div class="sp-tabs">
+      <button class="sp-tab active" id="cam0">ك1</button>
+      <button class="sp-tab" id="cam1">ك2</button>
+      <button class="sp-tab" id="cam2">ك3</button>
+      <button class="sp-tab" id="cam3">ك4</button>
+    </div>
+    <div class="sp-row">
+      <span class="sp-name">الاتجاه</span>
+      <input class="sp-slider" type="range" id="dir" min="0" max="359" step="1" value="0"/>
+      <span class="sp-val" id="dirv">0°</span>
+    </div>
+    <div class="sp-row">
+      <span class="sp-name">زاوية الرؤية</span>
+      <input class="sp-slider" type="range" id="fov" min="30" max="120" step="1" value="70"/>
+      <span class="sp-val" id="fovv">70°</span>
+    </div>
+    <div class="sp-row">
+      <span class="sp-name">المدى</span>
+      <input class="sp-slider" type="range" id="rng" min="4" max="22" step="0.5" value="14"/>
+      <span class="sp-val" id="rngv">14م</span>
+    </div>
+  </div>
+
+  <div class="glass sp-section">
+    <div class="sp-title">التغطية</div>
+    <div class="sp-stats">
+      <div class="sp-stat"><div class="sp-stat-l">المساحة المغطّاة</div><div class="sp-stat-v" id="cov">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l">نقاط عمياء</div><div class="sp-stat-v" id="blind">—</div></div>
+    </div>
+    <div id="verdict" style="margin-top:9px;font-size:.74rem;font-weight:800;text-align:center;color:#34d399"></div>
+  </div>
+
+  <div class="glass sp-section">
+    <button class="sp-btn" id="btn-blind">👁️ إظهار/إخفاء النقاط العمياء</button>
+    <div style="height:8px"></div>
+    <button class="sp-btn secondary" id="btn-reset">↺ إعادة الضبط</button>
+  </div>
+</div>
+
+<script src="js/vendor/three.min.js"></script>
+<script src="js/vendor/OrbitControls.js"></script>
+<script src="js/vendor/VRButton.js"></script>
+<script src="js/xrlab.js"></script>
+<script>
+(function(){
+'use strict';
+
+var lab=XRLab.init({cameraPos:[0,15,17],target:[0,0,0.5],minDistance:6,maxDistance:60,fog:.004});
+var scene=lab.scene;
+
+/* ───────── room geometry ───────── */
+var HALFW=11, HALFD=7.5, WALLH=3;
+var floor=new THREE.Mesh(new THREE.BoxGeometry(HALFW*2,.2,HALFD*2),
+  new THREE.MeshStandardMaterial({color:0x0c1426,roughness:.9,metalness:.1}));
+floor.position.y=-.1; scene.add(floor);
+
+/* outer walls — semi-transparent so the interior stays visible from any angle */
+var outMat=new THREE.MeshStandardMaterial({color:0x24304e,transparent:true,opacity:.28,roughness:.8,side:THREE.DoubleSide});
+function wallBox(w,d,x,z){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,WALLH,d),outMat);
+  m.position.set(x,WALLH/2,z); scene.add(m);
+}
+wallBox(HALFW*2+.3,.3,0,-HALFD);  wallBox(HALFW*2+.3,.3,0,HALFD);
+wallBox(.3,HALFD*2,-HALFW,0);     wallBox(.3,HALFD*2,HALFW,0);
+
+/* ───────── interior occluders: walls (segments) + a pillar ───────── */
+/* every segment both blocks line-of-sight AND is drawn as a solid wall */
+var SEGS=[
+  /* L-shaped partition (lower-left) */
+  [-3,-7.5,-3,-2], [-7,-2,-3,-2],
+  /* L-shaped partition (upper-right) */
+  [3,2,3,7.5], [3,2,7,2],
+  /* central pillar (2×2) */
+  [-1,-1,1,-1],[1,-1,1,1],[1,1,-1,1],[-1,1,-1,-1]
+];
+var solidMat=new THREE.MeshStandardMaterial({color:0x37527a,roughness:.7,metalness:.2});
+SEGS.forEach(function(s){
+  var x1=s[0],z1=s[1],x2=s[2],z2=s[3];
+  var w=Math.abs(x2-x1)||.3, d=Math.abs(z2-z1)||.3;
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,WALLH*.92,d),solidMat);
+  m.position.set((x1+x2)/2,WALLH*.46,(z1+z2)/2); scene.add(m);
+});
+function inPillar(x,z){return Math.abs(x)<1&&Math.abs(z)<1;}
+
+/* segment-segment intersection (does cam→cell cross a wall?) */
+function blocked(ax,az,bx,bz){
+  for(var i=0;i<SEGS.length;i++){
+    var s=SEGS[i];
+    if(segHit(ax,az,bx,bz,s[0],s[1],s[2],s[3]))return true;
+  }
+  return false;
+}
+function segHit(ax,ay,bx,by,cx,cy,dx,dy){
+  function ccw(px,py,qx,qy,rx,ry){return (ry-py)*(qx-px)>(qy-py)*(rx-px);}
+  return ccw(ax,ay,cx,cy,dx,dy)!==ccw(bx,by,cx,cy,dx,dy)&&
+         ccw(ax,ay,bx,by,cx,cy)!==ccw(ax,ay,bx,by,dx,dy);
+}
+
+/* ───────── coverage heat-grid (InstancedMesh of floor tiles) ───────── */
+var CELL=0.5, COLS=Math.round(HALFW*2/CELL), ROWS=Math.round(HALFD*2/CELL);
+var tileGeo=new THREE.PlaneGeometry(CELL*.92,CELL*.92); tileGeo.rotateX(-Math.PI/2);
+var tiles=new THREE.InstancedMesh(tileGeo,
+  new THREE.MeshBasicMaterial({transparent:true,opacity:.5}),COLS*ROWS);
+var mtx=new THREE.Matrix4(), cellX=[], cellZ=[];
+for(var j=0;j<ROWS;j++)for(var i=0;i<COLS;i++){
+  var cx=-HALFW+(i+.5)*CELL, cz=-HALFD+(j+.5)*CELL, id=j*COLS+i;
+  cellX[id]=cx; cellZ[id]=cz;
+  mtx.setPosition(cx,.03,cz); tiles.setMatrixAt(id,mtx);
+}
+tiles.instanceMatrix.needsUpdate=true; scene.add(tiles);
+var C_GREEN=new THREE.Color(0x22c55e), C_RED=new THREE.Color(0xef4444),
+    C_DARK=new THREE.Color(0x111827);
+
+/* ───────── cameras ───────── */
+var D2R=Math.PI/180;
+function faceCenter(x,z){return Math.atan2(-z,-x);}   /* point toward room centre */
+var CAMS=[
+  {x:-10,z:-6.5}, {x:10,z:-6.5}, {x:10,z:6.5}, {x:-10,z:6.5}
+].map(function(p,i){
+  return {x:p.x,z:p.z,facing:faceCenter(p.x,p.z),fov:70*D2R,range:14,i:i};
+});
+var pickables=[];
+CAMS.forEach(function(c){
+  var g=new THREE.Group(); g.position.set(c.x,2.6,c.z);
+  var body=new THREE.Mesh(new THREE.BoxGeometry(.5,.4,.7),
+    new THREE.MeshStandardMaterial({color:0x1f2937,roughness:.4,metalness:.6}));
+  var lens=new THREE.Mesh(new THREE.CylinderGeometry(.16,.2,.3,16),
+    new THREE.MeshStandardMaterial({color:0x0ea5e9,emissive:0x0369a1,emissiveIntensity:.8}));
+  lens.rotation.x=Math.PI/2; lens.position.z=.45; g.add(body); g.add(lens);
+  c.group=g; c.lens=lens;
+  /* facing arrow on the floor */
+  c.arrow=new THREE.ArrowHelper(new THREE.Vector3(1,0,0),new THREE.Vector3(c.x,.1,c.z),4,0x38bdf8,1,.6);
+  scene.add(c.arrow);
+  scene.add(g);
+  var lbl=lab.textSprite('ك'+(c.i+1),'#7dd3fc',.6); lbl.position.set(c.x,3.6,c.z); scene.add(lbl);
+  /* pick hitbox */
+  var hb=new THREE.Mesh(new THREE.SphereGeometry(1.1,10,8),new THREE.MeshBasicMaterial({visible:false}));
+  hb.position.set(c.x,2.6,c.z); hb.userData={cam:c.i}; scene.add(hb); pickables.push(hb);
+});
+
+/* ───────── coverage computation ───────── */
+var showBlind=true, coverage=0, blindPct=0;
+function visible(c,x,z){
+  var dx=x-c.x, dz=z-c.z, dist=Math.hypot(dx,dz);
+  if(dist>c.range)return false;
+  var diff=Math.atan2(dz,dx)-c.facing;
+  while(diff>Math.PI)diff-=2*Math.PI; while(diff<-Math.PI)diff+=2*Math.PI;
+  if(Math.abs(diff)>c.fov/2)return false;
+  return !blocked(c.x,c.z,x,z);
+}
+function recompute(){
+  var covered=0,total=0;
+  for(var id=0;id<COLS*ROWS;id++){
+    var x=cellX[id],z=cellZ[id];
+    if(inPillar(x,z)){tiles.setColorAt(id,C_DARK);continue;}
+    total++;
+    var seen=false;
+    for(var k=0;k<CAMS.length;k++){if(visible(CAMS[k],x,z)){seen=true;break;}}
+    if(seen){covered++;tiles.setColorAt(id,C_GREEN);}
+    else tiles.setColorAt(id,showBlind?C_RED:C_DARK);
+  }
+  tiles.instanceColor.needsUpdate=true;
+  coverage=total?covered/total:0; blindPct=1-coverage;
+  document.getElementById('cov').textContent=Math.round(coverage*100)+'%';
+  document.getElementById('blind').textContent=Math.round(blindPct*100)+'%';
+  var v=document.getElementById('verdict');
+  if(coverage>=.9){v.style.color='#34d399';v.textContent='✓ تغطية ممتازة — لا تكاد توجد نقاط عمياء';}
+  else if(coverage>=.7){v.style.color='#fbbf24';v.textContent='تغطية جيدة — لا تزال هناك زوايا مكشوفة';}
+  else{v.style.color='#f87171';v.textContent='تغطية ضعيفة — أعد توجيه الكاميرات لسد الفجوات';}
+}
+
+/* ───────── selection + UI ───────── */
+var sel=0;
+function syncSliders(){
+  var c=CAMS[sel];
+  document.getElementById('dir').value=Math.round(((c.facing/D2R)%360+360)%360);
+  document.getElementById('fov').value=Math.round(c.fov/D2R);
+  document.getElementById('rng').value=c.range;
+  document.getElementById('dirv').textContent=document.getElementById('dir').value+'°';
+  document.getElementById('fovv').textContent=document.getElementById('fov').value+'°';
+  document.getElementById('rngv').textContent=c.range+'م';
+}
+function highlight(){
+  CAMS.forEach(function(c){
+    var on=c.i===sel;
+    c.lens.material.emissiveIntensity=on?1.6:.5;
+    c.arrow.setColor(on?0xfbbf24:0x38bdf8);
+    c.arrow.setLength(on?5:4,on?1.2:1,.6);
+    document.getElementById('cam'+c.i).classList.toggle('active',on);
+  });
+}
+function updateArrow(c){
+  c.arrow.setDirection(new THREE.Vector3(Math.cos(c.facing),0,Math.sin(c.facing)));
+}
+function selectCam(i){sel=i;syncSliders();highlight();lab.audio&&lab.audio.click&&lab.audio.click();}
+
+['dir','fov','rng'].forEach(function(id){
+  document.getElementById(id).addEventListener('input',function(){
+    var c=CAMS[sel];
+    if(id==='dir'){c.facing=(+this.value)*D2R;document.getElementById('dirv').textContent=this.value+'°';updateArrow(c);}
+    if(id==='fov'){c.fov=(+this.value)*D2R;document.getElementById('fovv').textContent=this.value+'°';}
+    if(id==='rng'){c.range=+this.value;document.getElementById('rngv').textContent=this.value+'م';}
+    recompute();
+  });
+});
+for(var t=0;t<4;t++)(function(t){document.getElementById('cam'+t).onclick=function(){selectCam(t);};})(t);
+
+document.getElementById('btn-blind').onclick=function(){showBlind=!showBlind;recompute();};
+document.getElementById('btn-reset').onclick=function(){
+  CAMS.forEach(function(c){c.facing=faceCenter(c.x,c.z);c.fov=70*D2R;c.range=14;updateArrow(c);});
+  showBlind=true; selectCam(0); recompute();
+};
+
+/* ───────── input: mouse + VR laser ───────── */
+var ray=new THREE.Raycaster(),ndc=new THREE.Vector2(),m4=new THREE.Matrix4();
+function pick(o){if(o&&o.userData&&o.userData.cam!=null)selectCam(o.userData.cam);}
+function castMouse(ev){
+  ndc.x=(ev.clientX/window.innerWidth)*2-1; ndc.y=-(ev.clientY/window.innerHeight)*2+1;
+  ray.setFromCamera(ndc,lab.camera);
+  var h=ray.intersectObjects(pickables,false); if(h.length)pick(h[0].object);
+}
+var down=null;
+lab.renderer.domElement.addEventListener('pointerdown',function(e){down={x:e.clientX,y:e.clientY};});
+lab.renderer.domElement.addEventListener('pointerup',function(e){
+  if(down&&Math.hypot(e.clientX-down.x,e.clientY-down.y)<5)castMouse(e); down=null;});
+lab.onSelect(function(ctrl){
+  m4.identity().extractRotation(ctrl.matrixWorld);
+  var o=new THREE.Vector3().setFromMatrixPosition(ctrl.matrixWorld);
+  var d=new THREE.Vector3(0,0,-1).applyMatrix4(m4).normalize();
+  ray.set(o,d);
+  var h=ray.intersectObjects(pickables,false); if(h.length)pick(h[0].object);
+});
+
+lab.onFrame(function(dt,t){
+  CAMS[sel]&&(CAMS[sel].lens.material.emissiveIntensity=1.2+Math.sin(t*5)*.5);
+});
+
+/* init */
+CAMS.forEach(updateArrow);
+selectCam(0); recompute();
+setTimeout(function(){document.getElementById('hint').classList.add('gone');},8000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<title>غرفة عمليات الاستجابة للطوارئ — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<link rel="stylesheet" href="css/xrlab.css"/>
+</head>
+<body>
+
+<div id="scene"></div>
+
+<header class="hud-header">
+  <a href="security.html" class="hud-back">← رجوع</a>
+  <div class="hud-title">🚨 غرفة عمليات <span>الاستجابة للطوارئ</span></div>
+</header>
+
+<div class="hint glass" id="hint">🖱️ انقر وحدة (خضراء) ثم انقر نقطة هدف لإرسالها · في VR وجِّه الزناد · ابدأ السيناريو من اللوحة</div>
+
+<div class="side-panel">
+  <div class="glass sp-section">
+    <div class="sp-title">لوحة الضابط</div>
+    <div class="sp-stats">
+      <div class="sp-stat"><div class="sp-stat-l">الوقت المتبقي</div><div class="sp-stat-v" id="clock">10:00</div></div>
+      <div class="sp-stat"><div class="sp-stat-l">نقاط مؤمَّنة</div><div class="sp-stat-v" id="secured">0 / 4</div></div>
+      <div class="sp-stat"><div class="sp-stat-l">موقع الحادثة</div><div class="sp-stat-v" id="incident">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l">الحالة</div><div class="sp-stat-v" id="state">جاهز</div></div>
+    </div>
+  </div>
+
+  <div class="glass sp-section">
+    <button class="sp-btn" id="btn-start">▶ بدء السيناريو</button>
+    <div style="height:8px"></div>
+    <button class="sp-btn secondary" id="btn-reset">↺ إعادة الضبط</button>
+  </div>
+
+  <div class="glass sp-section">
+    <div class="sp-title">حالة الوحدات</div>
+    <div class="sp-stats" id="units-stats"></div>
+    <div id="verdict" style="margin-top:10px;font-size:.74rem;font-weight:800;text-align:center;color:#34d399"></div>
+  </div>
+</div>
+
+<script src="js/vendor/three.min.js"></script>
+<script src="js/vendor/OrbitControls.js"></script>
+<script src="js/vendor/VRButton.js"></script>
+<script src="js/xrlab.js"></script>
+<script src="js/amman-map.js"></script>
+<script>
+(function(){
+'use strict';
+
+var lab=XRLab.init({cameraPos:[0,2.95,4.7],target:[0,0.9,-0.2],minDistance:0.6,maxDistance:30,fog:.006});
+
+/* ───────── map root: real metres → tabletop ───────── */
+var TABLE_Y=0.9, SCALE=0.006, VIEW_R=540;   /* keep features within this radius */
+var root=new THREE.Group();
+root.position.y=TABLE_Y; root.scale.setScalar(SCALE);
+lab.scene.add(root);
+
+/* lit map base (glows from within) */
+var baseMat=new THREE.MeshStandardMaterial({color:0x0a1326,emissive:0x0a2540,emissiveIntensity:.7,roughness:.6,metalness:.2});
+var base=new THREE.Mesh(new THREE.CylinderGeometry(VIEW_R+30,VIEW_R+30,4,72),baseMat);
+base.position.y=-2; root.add(base);
+var ring=new THREE.Mesh(new THREE.TorusGeometry(VIEW_R+30,4,8,72),
+  new THREE.MeshBasicMaterial({color:0x38bdf8,transparent:true,opacity:.55}));
+ring.rotation.x=Math.PI/2; ring.position.y=.2; root.add(ring);
+/* table pedestal under the map */
+var ped=new THREE.Mesh(new THREE.CylinderGeometry((VIEW_R+30),(VIEW_R-40),(TABLE_Y/SCALE),48),
+  new THREE.MeshStandardMaterial({color:0x0b0f1c,roughness:.8,metalness:.3}));
+ped.position.y=-2-(TABLE_Y/SCALE)/2; root.add(ped);
+
+function inR(x,z){return x*x+z*z<=VIEW_R*VIEW_R;}
+
+/* ───────── streets → glowing lines + walkable graph ───────── */
+var nodes={};                                   /* key -> {x,z,nbr:[[key,w]]} */
+function nkey(x,z){return Math.round(x/4)+'_'+Math.round(z/4);}
+function getNode(x,z){var k=nkey(x,z);var n=nodes[k];if(!n){n=nodes[k]={k:k,x:x,z:z,nbr:[]};}return n;}
+function link(a,b){
+  var w=Math.hypot(a.x-b.x,a.z-b.z);
+  if(a===b||w===0)return;
+  if(!a.nbr.some(function(e){return e[0]===b.k;}))a.nbr.push([b.k,w]);
+  if(!b.nbr.some(function(e){return e[0]===a.k;}))b.nbr.push([a.k,w]);
+}
+var segPos=[];                                  /* line segment endpoints */
+function addRun(run){
+  if(run.length<2)return;
+  for(var i=0;i<run.length;i++){
+    if(i>0){
+      var a=run[i-1],b=run[i];
+      segPos.push(a[0],0,a[1], b[0],0,b[1]);
+      link(getNode(a[0],a[1]),getNode(b[0],b[1]));
+    }
+  }
+}
+AMMAN_MAP.streets.forEach(function(pl){
+  var run=[];
+  for(var i=0;i<pl.length;i+=2){
+    var x=pl[i],z=pl[i+1];
+    if(inR(x,z))run.push([x,z]);
+    else{addRun(run);run=[];}
+  }
+  addRun(run);
+});
+var streetGeo=new THREE.BufferGeometry();
+streetGeo.setAttribute('position',new THREE.Float32BufferAttribute(segPos,3));
+var streets=new THREE.LineSegments(streetGeo,new THREE.LineBasicMaterial({
+  color:0x9fd0ff,transparent:true,opacity:.7,blending:THREE.AdditiveBlending,depthWrite:false}));
+streets.position.y=.6; root.add(streets);
+var nodeList=Object.keys(nodes).map(function(k){return nodes[k];});
+
+/* keep only the largest connected component so every route is reachable
+   (the clipped street network splits into a few isolated islands) */
+var comp={},cid=0,counts={};
+nodeList.forEach(function(n){
+  if(comp[n.k]!=null)return;
+  var stack=[n.k];comp[n.k]=cid;counts[cid]=0;
+  while(stack.length){
+    var k=stack.pop();counts[cid]++;
+    nodes[k].nbr.forEach(function(e){if(comp[e[0]]==null){comp[e[0]]=cid;stack.push(e[0]);}});
+  }
+  cid++;
+});
+var mainCid=0;for(var c in counts)if(counts[c]>counts[mainCid])mainCid=+c;
+var mainList=nodeList.filter(function(n){return comp[n.k]==mainCid;});
+
+/* nearest reachable graph node to an arbitrary point */
+function nearest(x,z){
+  var best=null,bd=1e18;
+  for(var i=0;i<mainList.length;i++){
+    var n=mainList[i],d=(n.x-x)*(n.x-x)+(n.z-z)*(n.z-z);
+    if(d<bd){bd=d;best=n;}
+  }
+  return best;
+}
+/* Dijkstra → array of {x,z} along streets, or null */
+function route(srcKey,dstKey){
+  if(srcKey===dstKey)return [{x:nodes[srcKey].x,z:nodes[srcKey].z}];
+  var dist={},prev={},done={};
+  for(var k in nodes)dist[k]=1e18;
+  dist[srcKey]=0;
+  while(true){
+    var u=null,ud=1e18;
+    for(var k2 in dist){if(!done[k2]&&dist[k2]<ud){ud=dist[k2];u=k2;}}
+    if(u===null||u===dstKey)break;
+    done[u]=1;
+    var nbr=nodes[u].nbr;
+    for(var i=0;i<nbr.length;i++){
+      var v=nbr[i][0],nd=ud+nbr[i][1];
+      if(nd<dist[v]){dist[v]=nd;prev[v]=u;}
+    }
+  }
+  if(dist[dstKey]>=1e18)return null;
+  var path=[],c=dstKey;
+  while(c){path.unshift({x:nodes[c].x,z:nodes[c].z});c=prev[c];}
+  return path;
+}
+
+/* ───────── buildings → grey instanced boxes ───────── */
+var B=AMMAN_MAP.buildings, box=new THREE.BoxGeometry(1,1,1);
+var bMat=new THREE.MeshStandardMaterial({roughness:.9,metalness:.15,emissive:0x05080f,emissiveIntensity:1});
+var inst=new THREE.InstancedMesh(box,bMat,B.length);
+var m4=new THREE.Matrix4(),col=new THREE.Color();
+for(var i=0;i<B.length;i++){
+  var b=B[i];                                   /* [cx,cz,w,d,h] */
+  m4.makeScale(b[2]*.9,b[4],b[3]*.9);
+  m4.setPosition(b[0],b[4]/2,b[1]);
+  inst.setMatrixAt(i,m4);
+  var g=.18+((i*53)%50)/255;                     /* slight grey variation */
+  inst.setColorAt(i,col.setRGB(g,g*1.05,g*1.15));
+}
+inst.instanceMatrix.needsUpdate=true;
+root.add(inst);
+
+/* ───────── scenario markers ───────── */
+function labelAt(txt,color){
+  var s=lab.textSprite(txt,color,34);            /* 34 m tall in map space */
+  root.add(s); return s;
+}
+function hitbox(x,z,r,data){
+  var h=new THREE.Mesh(new THREE.CylinderGeometry(r,r,60,12),
+    new THREE.MeshBasicMaterial({visible:false}));
+  h.position.set(x,30,z); h.userData=data; root.add(h); pickables.push(h); return h;
+}
+var pickables=[];
+
+/* incident point (red, pulsing) — nearest street node to centre */
+var incNode=nearest(0,0);
+var incident={x:incNode.x,z:incNode.z,key:incNode.k,reached:false};
+var incRing=new THREE.Mesh(new THREE.TorusGeometry(22,4,8,32),
+  new THREE.MeshBasicMaterial({color:0xff3b30}));
+incRing.rotation.x=Math.PI/2; incRing.position.set(incident.x,1,incident.z); root.add(incRing);
+var incBeacon=new THREE.Mesh(new THREE.CylinderGeometry(5,5,260,12),
+  new THREE.MeshBasicMaterial({color:0xff3b30,transparent:true,opacity:.22,depthWrite:false}));
+incBeacon.position.set(incident.x,130,incident.z); root.add(incBeacon);
+labelAt('⚠ موقع الحادثة','#ff6b6b').position.set(incident.x,150,incident.z);
+hitbox(incident.x,incident.z,30,{kind:'incident'});
+
+/* 4 staging / route-control points near the map's access edges */
+var DIRS=[[0,-1],[1,0],[0,1],[-1,0]];            /* N, E, S, W */
+var staging=[];
+DIRS.forEach(function(d,idx){
+  var tx=d[0]*430,tz=d[1]*430,n=nearest(tx,tz);
+  var ring=new THREE.Mesh(new THREE.TorusGeometry(20,3.5,8,28),
+    new THREE.MeshBasicMaterial({color:0xffd60a}));
+  ring.rotation.x=Math.PI/2; ring.position.set(n.x,1,n.z); root.add(ring);
+  var disc=new THREE.Mesh(new THREE.CircleGeometry(20,28),
+    new THREE.MeshBasicMaterial({color:0xffd60a,transparent:true,opacity:.16}));
+  disc.rotation.x=-Math.PI/2; disc.position.set(n.x,.7,n.z); root.add(disc);
+  var lbl=labelAt('نقطة '+(idx+1),'#fde047'); lbl.position.set(n.x,70,n.z);
+  staging.push({x:n.x,z:n.z,key:n.k,secured:false,ring:ring,disc:disc,lbl:lbl,idx:idx});
+  hitbox(n.x,n.z,26,{kind:'staging',i:idx});
+});
+
+/* 6 response units (green) on the street ring */
+var UNIT_R=9, units=[];
+for(var u=0;u<6;u++){
+  var ang=(u/6)*Math.PI*2+0.4, ux=Math.cos(ang)*410, uz=Math.sin(ang)*410;
+  var n=nearest(ux,uz);
+  var orb=new THREE.Mesh(new THREE.SphereGeometry(UNIT_R,18,14),
+    new THREE.MeshStandardMaterial({color:0x22c55e,emissive:0x064e2a,emissiveIntensity:.9,roughness:.3}));
+  orb.position.set(n.x,UNIT_R+2,n.z); root.add(orb);
+  var beam=new THREE.Mesh(new THREE.CylinderGeometry(2.5,2.5,120,10),
+    new THREE.MeshBasicMaterial({color:0x4ade80,transparent:true,opacity:.25,depthWrite:false}));
+  beam.position.set(n.x,60,n.z); root.add(beam);
+  var sel=new THREE.Mesh(new THREE.TorusGeometry(16,2,8,28),
+    new THREE.MeshBasicMaterial({color:0xffffff}));
+  sel.rotation.x=Math.PI/2; sel.position.set(n.x,3,n.z); sel.visible=false; root.add(sel);
+  var lbl=labelAt('و'+(u+1),'#86efac'); lbl.position.set(n.x,UNIT_R*2+24,n.z);
+  units.push({i:u,orb:orb,beam:beam,sel:sel,lbl:lbl,node:n,path:null,seg:0,
+              x:n.x,z:n.z,status:'في الانتظار',target:null});
+  hitbox(n.x,n.z,24,{kind:'unit',i:u});
+}
+
+/* ───────── console (mirrors into VR panel) ───────── */
+var usWrap=document.getElementById('units-stats');
+units.forEach(function(u){
+  var d=document.createElement('div'); d.className='sp-stat';
+  d.innerHTML='<div class="sp-stat-l">الوحدة '+(u.i+1)+'</div><div class="sp-stat-v" id="us'+u.i+'">انتظار</div>';
+  usWrap.appendChild(d);
+});
+var elClock=document.getElementById('clock'),elSecured=document.getElementById('secured'),
+    elIncident=document.getElementById('incident'),elState=document.getElementById('state'),
+    elVerdict=document.getElementById('verdict');
+
+/* ───────── scenario state ───────── */
+var TIME_LIMIT=600;
+var S={running:false,done:false,t0:0,left:TIME_LIMIT,selected:-1};
+
+function setUnitStatus(u,txt){u.status=txt;document.getElementById('us'+u.i).textContent=txt;}
+
+function reset(){
+  S.running=false;S.done=false;S.left=TIME_LIMIT;S.selected=-1;
+  incident.reached=false; incRing.material.color.set(0xff3b30);
+  staging.forEach(function(s){
+    s.secured=false; s.ring.material.color.set(0xffd60a);
+    s.disc.material.color.set(0xffd60a); s.lbl.setText('نقطة '+(s.idx+1),'#fde047');
+  });
+  units.forEach(function(u){
+    u.path=null;u.seg=0;u.target=null;u.sel.visible=false;
+    u.x=u.node.x;u.z=u.node.z; placeUnit(u);
+    u.orb.material.color.set(0x22c55e);
+    setUnitStatus(u,'في الانتظار');
+  });
+  elClock.textContent='10:00'; elSecured.textContent='0 / 4';
+  elIncident.textContent='—'; elState.textContent='جاهز';
+  elState.style.color='#e2e8f0'; elVerdict.textContent='';
+}
+function start(){
+  if(S.running)return;
+  reset(); S.running=true; S.t0=performance.now()/1000;
+  elState.textContent='جارٍ'; elState.style.color='#fbbf24';
+  elIncident.textContent='بانتظار وحدة';
+  lab.audio&&lab.audio.ok&&lab.audio.ok();
+}
+
+function placeUnit(u){
+  u.orb.position.set(u.x,UNIT_R+2,u.z);
+  u.beam.position.set(u.x,60,u.z);
+  u.sel.position.set(u.x,3,u.z);
+  u.lbl.position.set(u.x,UNIT_R*2+24,u.z);
+}
+
+function selectUnit(i){
+  if(!S.running)return;
+  S.selected=i;
+  units.forEach(function(u){u.sel.visible=(u.i===i);});
+  lab.audio&&lab.audio.click&&lab.audio.click();
+}
+
+function assign(kind,idx){
+  if(!S.running||S.selected<0)return;
+  var u=units[S.selected];
+  var tx,tz,tkey;
+  if(kind==='incident'){tx=incident.x;tz=incident.z;tkey=incident.key;}
+  else{var s=staging[idx];tx=s.x;tz=s.z;tkey=s.key;}
+  var src=nearest(u.x,u.z);
+  var path=route(src.k,tkey);
+  if(!path){setUnitStatus(u,'لا مسار');lab.audio&&lab.audio.blip&&lab.audio.blip(180,.18,'square',.25);return;}
+  u.path=path;u.seg=0;u.target={kind:kind,idx:idx};
+  setUnitStatus(u,kind==='incident'?'→ الحادثة':'→ نقطة '+(idx+1));
+  lab.audio&&lab.audio.click&&lab.audio.click();
+}
+
+function pick(data){
+  if(!data)return;
+  if(data.kind==='unit')selectUnit(data.i);
+  else if(S.selected>=0)assign(data.kind,data.i);
+  else { elState.textContent='اختر وحدة أولاً'; elState.style.color='#fbbf24'; }
+}
+
+/* arrival handling */
+function arrive(u){
+  var tg=u.target; u.target=null; u.path=null;
+  if(tg.kind==='incident'){
+    incident.reached=true; incRing.material.color.set(0x34d399);
+    elIncident.textContent='تم الوصول ✓'; setUnitStatus(u,'في الحادثة');
+  }else{
+    var s=staging[tg.idx];
+    if(!s.secured){
+      s.secured=true; s.ring.material.color.set(0x34d399);
+      s.disc.material.color.set(0x34d399); s.lbl.setText('مؤمَّنة ✓','#34d399');
+    }
+    setUnitStatus(u,'مؤمِّن نقطة '+(tg.idx+1));
+  }
+  lab.audio&&lab.audio.ok&&lab.audio.ok();
+  updateSecured();
+}
+function updateSecured(){
+  var n=0; staging.forEach(function(s){if(s.secured)n++;});
+  elSecured.textContent=n+' / 4';
+  if(n===4&&incident.reached)win();
+}
+function win(){
+  S.running=false;S.done=true;
+  var used=TIME_LIMIT-S.left, mm=Math.floor(used/60), ss=Math.round(used%60);
+  var grade=used<240?'ممتاز':used<420?'جيد':'يحتاج تحسين';
+  var clr=used<240?'#34d399':used<420?'#fbbf24':'#f87171';
+  elState.textContent='نجاح'; elState.style.color='#34d399';
+  elVerdict.style.color=clr;
+  elVerdict.textContent='✓ تأمين المنطقة خلال '+mm+':'+(ss<10?'0':'')+ss+' — تقييم الضابط: '+grade;
+  lab.audio&&lab.audio.ok&&lab.audio.ok();
+}
+function lose(){
+  S.running=false;S.done=true;
+  elState.textContent='فشل'; elState.style.color='#f87171';
+  elVerdict.style.color='#f87171';
+  elVerdict.textContent='✗ انتهى الوقت قبل تأمين كل المسارات — أعد المحاولة وحسّن توزيع الوحدات';
+  lab.audio&&lab.audio.blip&&lab.audio.blip(150,.4,'sawtooth',.25);
+}
+
+/* ───────── frame loop ───────── */
+var SPEED=16;                                    /* metres / second */
+lab.onFrame(function(dt,t){
+  /* pulses */
+  var p=1+Math.sin(t*3)*.12;
+  incRing.scale.setScalar(p); incBeacon.material.opacity=.16+Math.sin(t*3)*.08;
+  staging.forEach(function(s){if(!s.secured)s.ring.scale.setScalar(1+Math.sin(t*2.4+s.idx)*.1);});
+  units.forEach(function(u){if(u.i===S.selected)u.sel.scale.setScalar(1+Math.sin(t*6)*.15);});
+
+  if(!S.running)return;
+
+  /* countdown */
+  S.left=TIME_LIMIT-(performance.now()/1000-S.t0);
+  if(S.left<=0){S.left=0;elClock.textContent='00:00';lose();return;}
+  var mm=Math.floor(S.left/60),ss=Math.floor(S.left%60);
+  elClock.textContent=(mm<10?'0':'')+mm+':'+(ss<10?'0':'')+ss;
+  if(S.left<60)elClock.style.color='#f87171';else elClock.style.color='';
+
+  /* move units along their routes */
+  units.forEach(function(u){
+    if(!u.path)return;
+    var step=SPEED*dt;
+    while(step>0&&u.seg<u.path.length-1){
+      var a={x:u.x,z:u.z},b=u.path[u.seg+1];
+      var d=Math.hypot(b.x-a.x,b.z-a.z);
+      if(d<=step){u.x=b.x;u.z=b.z;u.seg++;step-=d;}
+      else{u.x+=(b.x-a.x)/d*step;u.z+=(b.z-a.z)/d*step;step=0;}
+    }
+    placeUnit(u);
+    if(u.seg>=u.path.length-1)arrive(u);
+  });
+});
+
+/* ───────── input: mouse + VR laser ───────── */
+var ray=new THREE.Raycaster(),ndc=new THREE.Vector2(),m=new THREE.Matrix4();
+function castMouse(ev){
+  ndc.x=(ev.clientX/window.innerWidth)*2-1;
+  ndc.y=-(ev.clientY/window.innerHeight)*2+1;
+  ray.setFromCamera(ndc,lab.camera);
+  var h=ray.intersectObjects(pickables,false);
+  if(h.length)pick(h[0].object.userData);
+}
+/* distinguish click from orbit-drag */
+var down=null;
+lab.renderer.domElement.addEventListener('pointerdown',function(e){down={x:e.clientX,y:e.clientY};});
+lab.renderer.domElement.addEventListener('pointerup',function(e){
+  if(down&&Math.hypot(e.clientX-down.x,e.clientY-down.y)<5)castMouse(e);
+  down=null;
+});
+lab.onSelect(function(ctrl){
+  m.identity().extractRotation(ctrl.matrixWorld);
+  var o=new THREE.Vector3().setFromMatrixPosition(ctrl.matrixWorld);
+  var d=new THREE.Vector3(0,0,-1).applyMatrix4(m).normalize();
+  ray.set(o,d);
+  var h=ray.intersectObjects(pickables,false);
+  if(h.length)pick(h[0].object.userData);
+});
+
+document.getElementById('btn-start').onclick=start;
+document.getElementById('btn-reset').onclick=reset;
+setTimeout(function(){document.getElementById('hint').classList.add('gone');},8000);
+
+reset();
+})();
+</script>
+</body>
+</html>
