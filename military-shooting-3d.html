@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<title>ميدان الرماية ثلاثي الأبعاد — EDAMA</title>
+<link rel="stylesheet" href="css/portal.css"/>
+<link rel="stylesheet" href="css/xrlab.css"/>
+<style>
+/* ── selection screen ── */
+#select{position:fixed;inset:0;z-index:50;overflow:auto;
+  background:radial-gradient(1200px 600px at 50% -10%,#13233f,#070d1a 60%);
+  display:flex;flex-direction:column;align-items:center;padding:34px 18px;gap:22px}
+#select h1{font-size:1.7rem;font-weight:900;color:#e8eefc;margin:.2em 0;text-align:center}
+#select h1 span{color:#34d399}
+#select .sub{color:#94a3b8;font-size:.95rem;margin-top:-12px}
+.pick-title{font-size:.8rem;font-weight:800;color:#64748b;letter-spacing:2px;margin:6px 0}
+.cards{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;max-width:880px}
+.card{width:260px;background:rgba(17,26,48,.7);border:2px solid rgba(148,163,184,.18);
+  border-radius:16px;padding:16px 18px;cursor:pointer;transition:.18s;color:#cbd5e1}
+.card:hover{transform:translateY(-3px);border-color:#475569}
+.card.on{border-color:var(--c,#34d399);background:rgba(52,211,153,.10);box-shadow:0 10px 34px rgba(52,211,153,.18)}
+.card .ic{font-size:1.9rem}
+.card .nm{font-size:1.05rem;font-weight:900;color:#f1f5f9;margin:4px 0}
+.card .ds{font-size:.82rem;line-height:1.6;color:#94a3b8}
+.card .tags{margin-top:8px;display:flex;flex-wrap:wrap;gap:5px}
+.card .tags span{font-size:.66rem;background:rgba(255,255,255,.06);border-radius:6px;padding:2px 7px;color:#cbd5e1}
+#startBtn{margin-top:6px;padding:14px 40px;border:none;border-radius:14px;cursor:pointer;
+  background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;font-size:1.05rem;font-weight:900;
+  box-shadow:0 8px 30px rgba(34,197,94,.35);transition:.2s}
+#startBtn:hover{transform:translateY(-2px)}
+#startBtn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+#select .back{position:absolute;top:16px;right:18px;color:#94a3b8;text-decoration:none;font-weight:800}
+/* desktop crosshair */
+#cross{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:20;pointer-events:none;
+  width:26px;height:26px;display:none}
+#cross::before,#cross::after{content:"";position:absolute;background:#34d399;box-shadow:0 0 6px #34d399}
+#cross::before{left:12px;top:0;width:2px;height:26px}
+#cross::after{top:12px;left:0;height:2px;width:26px}
+body.training #cross{display:block}
+body:not(.training) .side-panel,body:not(.training) .hud-header{display:none}
+</style>
+</head>
+<body>
+
+<div id="scene"></div>
+<div id="cross"></div>
+
+<!-- ════════ شاشة الاختيار ════════ -->
+<div id="select">
+  <a href="security.html" class="back">← رجوع</a>
+  <h1>🎯 ميدان الرماية <span>التدريبي</span></h1>
+  <div class="sub">اختر سلاحك والميدان ثم ابدأ التدريب — أهداف ورقية بنظام نقاط</div>
+
+  <div class="pick-title">اختر السلاح</div>
+  <div class="cards" id="weaponCards">
+    <div class="card" data-w="M9" style="--c:#60a5fa">
+      <div class="ic">🔫</div><div class="nm">مسدس M9</div>
+      <div class="ds">مدى فعّال 50م · سرعة إطلاق عالية · تشتت متوسط</div>
+      <div class="tags"><span>مخزن 15</span><span>تشتت ±3°</span></div>
+    </div>
+    <div class="card" data-w="M16A2" style="--c:#34d399">
+      <div class="ic">🪖</div><div class="nm">بندقية M16A2</div>
+      <div class="ds">مدى فعّال 300م · دقة عالية · سرعة إطلاق متوسطة</div>
+      <div class="tags"><span>مخزن 30</span><span>تشتت ±1°</span></div>
+    </div>
+  </div>
+
+  <div class="pick-title">اختر ميدان الرماية</div>
+  <div class="cards" id="rangeCards">
+    <div class="card" data-r="indoor" style="--c:#94a3b8">
+      <div class="ic">🏠</div><div class="nm">ميدان مغلق</div>
+      <div class="ds">مسافة 25م · إضاءة اصطناعية · أهداف ثابتة ومتحركة</div>
+    </div>
+    <div class="card" data-r="outdoor_day" style="--c:#fbbf24">
+      <div class="ic">☀️</div><div class="nm">مفتوح نهاري</div>
+      <div class="ds">مسافة حتى 100م · إضاءة شمسية · رياح خفيفة تؤثر على المسار</div>
+    </div>
+    <div class="card" data-r="outdoor_night" style="--c:#22d3ee">
+      <div class="ic">🌙</div><div class="nm">مفتوح ليلي</div>
+      <div class="ds">مسافة 50م · إضاءة منخفضة · أهداف متوهجة تظهر وتختفي</div>
+    </div>
+  </div>
+
+  <button id="startBtn" disabled>▶ ابدأ التدريب</button>
+</div>
+
+<!-- ════════ HUD أثناء التدريب ════════ -->
+<header class="hud-header">
+  <a href="security.html" class="hud-back">← خروج</a>
+  <div class="hud-title">🎯 ميدان الرماية <span id="hud-range">—</span></div>
+</header>
+
+<div class="side-panel">
+  <div class="glass sp-section">
+    <div class="sp-title">لوحة المتدرب — إدامة</div>
+    <div class="sp-stats">
+      <div class="sp-stat"><div class="sp-stat-l">السلاح</div><div class="sp-stat-v" id="s-weapon">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l">الذخيرة</div><div class="sp-stat-v" id="s-ammo">—</div></div>
+      <div class="sp-stat"><div class="sp-stat-l">الإصابات</div><div class="sp-stat-v" id="s-hits">0</div></div>
+      <div class="sp-stat"><div class="sp-stat-l">الدقة</div><div class="sp-stat-v" id="s-acc">0%</div></div>
+      <div class="sp-stat"><div class="sp-stat-l">النقاط</div><div class="sp-stat-v" id="s-pts">0</div></div>
+      <div class="sp-stat"><div class="sp-stat-l">الطلقات</div><div class="sp-stat-v" id="s-shots">0</div></div>
+    </div>
+  </div>
+  <div class="glass sp-section">
+    <button class="sp-btn" id="btn-reload">⟳ إعادة التعبئة</button>
+    <div style="height:8px"></div>
+    <button class="sp-btn" id="btn-range">🗺️ تغيير الميدان</button>
+    <div style="height:8px"></div>
+    <button class="sp-btn secondary" id="btn-end">⏹ إنهاء التدريب</button>
+  </div>
+</div>
+
+<script src="js/vendor/three.min.js"></script>
+<script src="js/vendor/OrbitControls.js"></script>
+<script src="js/vendor/VRButton.js"></script>
+<script src="js/xrlab.js"></script>
+<script>
+(function(){
+'use strict';
+
+/* ═══════════════════════════════════════════════════════════════
+   CONFIG — عدّل الأرقام من هنا دون البحث في بقية الكود
+   ═══════════════════════════════════════════════════════════════ */
+var WEAPONS = {
+  M9:    { name:'مسدس M9',      mag:15, spreadDeg:3, recoil:0.07, rateMs:130, model:'pistol' },
+  M16A2: { name:'بندقية M16A2', mag:30, spreadDeg:1, recoil:0.035, rateMs:95,  model:'rifle'  }
+};
+var RANGES = {
+  indoor:        { name:'مغلق',        dist:25,  wind:false, glow:false,
+                   sky:0x121821, fog:0.02,  light:{hemi:0.6, dir:0.5, pt:0.4}, stars:false },
+  outdoor_day:   { name:'مفتوح نهاري', dist:100, wind:true,  glow:false,
+                   sky:0x8fbfe8, fog:0.004, light:{hemi:1.1, dir:1.4, pt:0.3}, stars:false },
+  outdoor_night: { name:'مفتوح ليلي',  dist:50,  wind:false, glow:true,
+                   sky:0x01040a, fog:0.012, light:{hemi:0.12,dir:0.08,pt:0.2}, stars:true }
+};
+/* نطاقات التهديف: نصف القطر النسبي (0..1) ← النقاط */
+var SCORE_RINGS = [ {f:0.10,score:10}, {f:0.25,score:7}, {f:0.45,score:5}, {f:0.70,score:3}, {f:1.00,score:1} ];
+var TARGET_SIZE = 1.2;            /* قطر الهدف بالأمتار */
+var WIND_MAX    = 0.9;            /* أقصى انحراف أفقي للرياح */
+/* ═══════════════════════════════════════════════════════════════ */
+
+var lab=null, scene=null;
+var rangeRoot=null, targets=[], pickables=[];
+var weaponGroup=null, muzzle=null, reticle=null, msgSprite=null, msgTimer=0;
+var report=null, reportBtns=[];
+var globalLights=[], starObjs=[];
+var ray=new THREE.Raycaster(), tmpM=new THREE.Matrix4();
+var vTmpO=new THREE.Vector3(), vTmpD=new THREE.Vector3();
+
+var state={ weapon:'M16A2', range:'indoor', mode:'select', ammo:0, windX:0,
+  shots:0, hits:0, points:0, bullseyes:0, lastShot:0, recoilV:0 };
+
+/* ─────────── selection screen wiring ─────────── */
+var selDiv=document.getElementById('select'), startBtn=document.getElementById('startBtn');
+var chosenW=null, chosenR=null;
+function wireCards(wrap,attr,onPick){
+  wrap.querySelectorAll('.card').forEach(function(c){
+    c.onclick=function(){
+      wrap.querySelectorAll('.card').forEach(function(x){x.classList.remove('on');});
+      c.classList.add('on'); onPick(c.getAttribute(attr));
+      startBtn.disabled=!(chosenW&&chosenR);
+    };
+  });
+}
+wireCards(document.getElementById('weaponCards'),'data-w',function(v){chosenW=v;});
+wireCards(document.getElementById('rangeCards'),'data-r',function(v){chosenR=v;});
+startBtn.onclick=function(){ startTraining(chosenW,chosenR); };
+
+/* ─────────── boot the lab once ─────────── */
+function ensureLab(){
+  if(lab)return;
+  lab=XRLab.init({floor:false,cameraPos:[0,1.7,0.25],target:[0,1.55,-6],minDistance:0.3,maxDistance:45});
+  scene=lab.scene;
+  lab.realScene.traverse(function(o){
+    if(o.isLight)globalLights.push(o);
+    if(o.isPoints)starObjs.push(o);
+  });
+  buildReticle(); buildMessage(); buildReport(); wireInput();
+  lab.onFrame(frame); lab.onSelect(onTrigger);
+}
+
+/* ─────────── start / restart a session ─────────── */
+function startTraining(wKey,rKey){
+  ensureLab();
+  state.weapon=wKey; state.range=rKey; state.mode='play';
+  resetStats();
+  buildWeapon(wKey);
+  buildRange(rKey);
+  hideReport();
+  selDiv.style.display='none';
+  document.body.classList.add('training');
+  lab.audio&&lab.audio.resume&&lab.audio.resume();
+  refreshHUD();
+}
+function resetStats(){
+  state.shots=0;state.hits=0;state.points=0;state.bullseyes=0;
+  state.ammo=WEAPONS[state.weapon].mag;
+}
+
+/* ═══════════ ENVIRONMENT ═══════════ */
+function disposeGroup(g){ if(!g)return; g.traverse(function(o){
+  if(o.geometry)o.geometry.dispose(); if(o.material){[].concat(o.material).forEach(function(m){m.dispose&&m.dispose();});}
+}); g.parent&&g.parent.remove(g); }
+
+function buildRange(rKey){
+  var R=RANGES[rKey];
+  disposeGroup(rangeRoot); targets=[]; pickables=pickables.filter(function(p){return p.userData.keep;});
+  rangeRoot=new THREE.Group(); scene.add(rangeRoot);
+
+  /* sky / fog / lights */
+  lab.realScene.background=new THREE.Color(R.sky);
+  lab.realScene.fog=new THREE.FogExp2(R.sky,R.fog);
+  globalLights.forEach(function(l){
+    if(l.isHemisphereLight)l.intensity=R.light.hemi;
+    else if(l.isDirectionalLight)l.intensity=R.light.dir;
+    else if(l.isPointLight)l.intensity=R.light.pt;
+  });
+  starObjs.forEach(function(s){s.visible=R.stars;});
+
+  /* ground */
+  var groundCol = rKey==='indoor'?0x4a3826 : rKey==='outdoor_day'?0xb9a06a : 0x0b1018;
+  var ground=new THREE.Mesh(new THREE.PlaneGeometry(400,400),
+    new THREE.MeshStandardMaterial({color:groundCol,roughness:.95,metalness:.02}));
+  ground.rotation.x=-Math.PI/2; rangeRoot.add(ground);
+
+  if(rKey==='indoor')      buildIndoor(R);
+  else if(rKey==='outdoor_day')   buildOutdoorDay(R);
+  else                     buildOutdoorNight(R);
+
+  document.getElementById('hud-range').textContent=R.name;
+  document.getElementById('s-weapon').textContent=WEAPONS[state.weapon].name;
+}
+
+function buildIndoor(R){
+  var wallMat=new THREE.MeshStandardMaterial({color:0x3a3f47,roughness:.9});
+  var len=R.dist+8, w=10, h=4;
+  /* side walls + back + ceiling */
+  function wall(geo,x,y,z){var m=new THREE.Mesh(geo,wallMat);m.position.set(x,y,z);rangeRoot.add(m);}
+  wall(new THREE.BoxGeometry(.3,h,len),-w/2,h/2,-len/2+4);
+  wall(new THREE.BoxGeometry(.3,h,len), w/2,h/2,-len/2+4);
+  wall(new THREE.BoxGeometry(w,h,.3),0,h/2,-R.dist-4);
+  var ceil=new THREE.Mesh(new THREE.BoxGeometry(w,.2,len),
+    new THREE.MeshStandardMaterial({color:0x2b2f36})); ceil.position.set(0,h,-len/2+4); rangeRoot.add(ceil);
+  /* fluorescent strips + lights */
+  for(var z=-4;z>-R.dist-2;z-=6){
+    var strip=new THREE.Mesh(new THREE.BoxGeometry(2.2,.08,.5),
+      new THREE.MeshBasicMaterial({color:0xdfefff})); strip.position.set(0,h-.12,z); rangeRoot.add(strip);
+    var pl=new THREE.PointLight(0xcfe6ff,.5,16); pl.position.set(0,h-.4,z); rangeRoot.add(pl);
+  }
+  /* 5 static targets */
+  var xs=[-3.2,-1.6,0,1.6,3.2];
+  xs.forEach(function(x){ addTarget(x,1.55,-R.dist,1,R.glow); });
+  /* 2 moving targets (slow left-right) */
+  [{x:-2,a:2.4,s:.6,p:0},{x:2,a:2.4,s:.55,p:1.5}].forEach(function(mv){
+    var t=addTarget(mv.x,2.4,-R.dist+1,.95,R.glow);
+    t.move={baseX:mv.x,amp:mv.a,speed:mv.s,phase:mv.p};
+  });
+}
+
+function buildOutdoorDay(R){
+  /* distant low-poly mountains ring */
+  var mMat=new THREE.MeshStandardMaterial({color:0x6f7d5a,roughness:1,flatShading:true});
+  for(var i=0;i<26;i++){
+    var a=(i/26)*Math.PI*2, d=170+Math.random()*40;
+    var hgt=18+Math.random()*34;
+    var mt=new THREE.Mesh(new THREE.ConeGeometry(20+Math.random()*16,hgt,5),mMat);
+    mt.position.set(Math.cos(a)*d,hgt/2-4,Math.sin(a)*d); rangeRoot.add(mt);
+  }
+  /* sun */
+  var sun=new THREE.Mesh(new THREE.SphereGeometry(8,16,16),
+    new THREE.MeshBasicMaterial({color:0xfff3c4})); sun.position.set(-60,70,-140); rangeRoot.add(sun);
+  /* 6 targets at 25 / 50 / 100 m, farther = smaller */
+  var specs=[{z:25,x:-3},{z:25,x:3},{z:50,x:-4},{z:50,x:4},{z:100,x:-6},{z:100,x:6}];
+  specs.forEach(function(s){
+    var sc = s.z>=100?0.7 : s.z>=50?0.85 : 1.0;
+    addTarget(s.x,1.55,-s.z,sc,R.glow);
+  });
+}
+
+function buildOutdoorNight(R){
+  var moon=new THREE.Mesh(new THREE.SphereGeometry(5,16,16),
+    new THREE.MeshBasicMaterial({color:0xcfe0ff})); moon.position.set(40,55,-120); rangeRoot.add(moon);
+  var pl=new THREE.PointLight(0x88aaff,.25,120); pl.position.set(40,55,-120); rangeRoot.add(pl);
+  /* 4 glowing targets that blink every ~3s */
+  var xs=[-4,-1.3,1.3,4];
+  xs.forEach(function(x,i){
+    var t=addTarget(x,1.7,-R.dist,1,true);
+    t.blink={phase:i*0.8};
+  });
+}
+
+/* ═══════════ TARGETS ═══════════ */
+var texNormal=null, texGreen=null;
+function targetTexture(green){
+  var cv=document.createElement('canvas'); cv.width=cv.height=256;
+  var c=cv.getContext('2d'); var cx=128,cy=128,R=124;
+  /* rings outer→inner */
+  var cols = green
+    ? ['#063','#085','#0a7','#0d9','#1fb']
+    : ['#111','#1d4ed8','#dc2626','#facc15','#ffffff'];
+  var fr=[1.0,0.70,0.45,0.25,0.10];
+  for(var i=0;i<5;i++){ c.beginPath();c.arc(cx,cy,R*fr[i],0,7);c.fillStyle=cols[i];c.fill();
+    c.lineWidth=2;c.strokeStyle=green?'#0f3':'rgba(0,0,0,.35)';c.stroke(); }
+  if(green){ c.shadowColor='#0f8';c.shadowBlur=18;c.beginPath();c.arc(cx,cy,R,0,7);
+    c.lineWidth=4;c.strokeStyle='#0f8';c.stroke(); }
+  return new THREE.CanvasTexture(cv);
+}
+function addTarget(x,y,z,scale,glow){
+  if(!texNormal)texNormal=targetTexture(false);
+  if(!texGreen)texGreen=targetTexture(true);
+  var g=new THREE.Group(); g.position.set(x,y,z);
+  var size=TARGET_SIZE*scale;
+  /* stand post */
+  var post=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,y,8),
+    new THREE.MeshStandardMaterial({color:0x556070})); post.position.y=-y/2; g.add(post);
+  /* face */
+  var plane=new THREE.Mesh(new THREE.PlaneGeometry(size,size),
+    new THREE.MeshBasicMaterial({map:glow?texGreen:texNormal,transparent:true}));
+  g.add(plane);
+  /* hit flash overlay */
+  var flash=new THREE.Mesh(new THREE.PlaneGeometry(size,size),
+    new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false}));
+  flash.position.z=.02; g.add(flash);
+  if(glow){ var halo=new THREE.Mesh(new THREE.CircleGeometry(size*.62,28),
+      new THREE.MeshBasicMaterial({color:0x00ff88,transparent:true,opacity:.12,blending:THREE.AdditiveBlending,depthWrite:false}));
+    halo.position.z=-.01; g.add(halo); }
+  rangeRoot.add(g);
+  var t={group:g,plane:plane,flash:flash,size:size,move:null,blink:null};
+  targets.push(t); pickables.push(plane); plane.userData.target=t;
+  return t;
+}
+
+/* ═══════════ WEAPON VIEW-MODEL ═══════════ */
+function buildWeapon(wKey){
+  if(weaponGroup){lab.camera.remove(weaponGroup);disposeGroup(weaponGroup);}
+  weaponGroup=new THREE.Group();
+  var metal=new THREE.MeshStandardMaterial({color:0x20242b,roughness:.45,metalness:.7});
+  var dark =new THREE.MeshStandardMaterial({color:0x111418,roughness:.6,metalness:.4});
+  if(WEAPONS[wKey].model==='pistol'){
+    var slide=new THREE.Mesh(new THREE.BoxGeometry(.06,.07,.22),metal); slide.position.z=-.05; weaponGroup.add(slide);
+    var grip=new THREE.Mesh(new THREE.BoxGeometry(.055,.13,.07),dark); grip.position.set(0,-.09,.04);grip.rotation.x=.25; weaponGroup.add(grip);
+    var brl=new THREE.Mesh(new THREE.CylinderGeometry(.012,.012,.1,10),dark); brl.rotation.x=Math.PI/2;brl.position.z=-.16; weaponGroup.add(brl);
+    muzzlePos(-0.20);
+  }else{
+    var body=new THREE.Mesh(new THREE.BoxGeometry(.05,.07,.5),metal); body.position.z=-.12; weaponGroup.add(body);
+    var stock=new THREE.Mesh(new THREE.BoxGeometry(.05,.085,.16),dark); stock.position.z=.16; weaponGroup.add(stock);
+    var grip2=new THREE.Mesh(new THREE.BoxGeometry(.05,.11,.06),dark); grip2.position.set(0,-.08,.02);grip2.rotation.x=.2; weaponGroup.add(grip2);
+    var maga=new THREE.Mesh(new THREE.BoxGeometry(.04,.12,.05),dark); maga.position.set(0,-.09,-.08); weaponGroup.add(maga);
+    var brl2=new THREE.Mesh(new THREE.CylinderGeometry(.011,.011,.3,10),dark); brl2.rotation.x=Math.PI/2;brl2.position.z=-.32; weaponGroup.add(brl2);
+    var sight=new THREE.Mesh(new THREE.BoxGeometry(.01,.03,.02),dark); sight.position.set(0,.055,-.18); weaponGroup.add(sight);
+    muzzlePos(-0.46);
+  }
+  /* muzzle flash sprite */
+  muzzle.visible=false; weaponGroup.add(muzzle);
+  weaponGroup.position.set(0.18,-0.17,-0.42);
+  lab.camera.add(weaponGroup);
+  if(!lab.camera.parent)lab.realScene.add(lab.camera);   /* ensure camera in graph for viewmodel */
+}
+function muzzlePos(z){
+  muzzle=new THREE.Mesh(new THREE.ConeGeometry(.03,.08,8),
+    new THREE.MeshBasicMaterial({color:0xffd27f,transparent:true,opacity:.9,blending:THREE.AdditiveBlending,depthWrite:false}));
+  muzzle.rotation.x=-Math.PI/2; muzzle.position.set(0,0,z);
+}
+
+/* ═══════════ RETICLE / MESSAGES / REPORT ═══════════ */
+function buildReticle(){
+  reticle=new THREE.Mesh(new THREE.RingGeometry(.006,.009,20),
+    new THREE.MeshBasicMaterial({color:0x34d399,transparent:true,opacity:.9,depthTest:false}));
+  reticle.position.set(0,0,-1); reticle.renderOrder=999; lab.camera.add(reticle);
+  if(!lab.camera.parent)lab.realScene.add(lab.camera);
+}
+function buildMessage(){
+  msgSprite=lab.textSprite('','#f87171',.16);
+  msgSprite.position.set(0,.35,-2); msgSprite.material.opacity=0; lab.camera.add(msgSprite);
+}
+function showMsg(text,color,dur){
+  msgSprite.setText(text,color); msgSprite.material.opacity=1; msgTimer=dur||1.2;
+}
+function buildReport(){
+  report=new THREE.Group(); report.visible=false;
+  var cv=document.createElement('canvas'); cv.width=1024;cv.height=720;
+  report.tex=new THREE.CanvasTexture(cv); report.cv=cv;
+  var panel=new THREE.Mesh(new THREE.PlaneGeometry(2.1,1.48),
+    new THREE.MeshBasicMaterial({map:report.tex,transparent:true,depthTest:false}));
+  panel.renderOrder=1000; report.add(panel);
+  /* two button hitboxes */
+  [['again','تدريب مجدداً',-0.5],['exit','الخروج',0.5]].forEach(function(b){
+    var btn=new THREE.Mesh(new THREE.PlaneGeometry(.78,.2),
+      new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0.001,depthTest:false}));
+    btn.position.set(b[2],-0.55,0.01); btn.userData={report:b[0],keep:true}; btn.renderOrder=1001;
+    report.add(btn); reportBtns.push(btn); pickables.push(btn);
+  });
+  report.position.set(0,0,-2.2); lab.camera.add(report);
+}
+function drawReport(){
+  var c=report.cv.getContext('2d'), W=1024,H=720;
+  c.clearRect(0,0,W,H);
+  c.fillStyle='rgba(8,14,26,.94)'; rrect(c,8,8,W-16,H-16,28); c.fill();
+  c.lineWidth=4;c.strokeStyle='#34d399';c.stroke();
+  c.textAlign='center';c.direction='rtl';
+  c.fillStyle='#e8eefc';c.font='900 52px Tajawal,Arial';c.fillText('تقرير أداء المتدرب',W/2,90);
+  c.strokeStyle='rgba(148,163,184,.4)';c.beginPath();c.moveTo(120,120);c.lineTo(W-120,120);c.stroke();
+  var acc=state.shots?Math.round(state.hits/state.shots*100):0;
+  var stars = acc>=85?3 : acc>=65?2 : 1;
+  var grade = stars===3?'ممتاز' : stars===2?'جيد' : 'يحتاج تحسين';
+  var rows=[
+    ['السلاح المستخدم', WEAPONS[state.weapon].name],
+    ['الميدان', RANGES[state.range].name],
+    ['مجموع الطلقات', state.shots],
+    ['الإصابات', state.hits],
+    ['الدقة', acc+'%'],
+    ['مجموع النقاط', state.points],
+    ['أعلى إصابة', state.bullseyes>0?('Bullseye ×'+state.bullseyes):'—']
+  ];
+  c.font='800 34px Tajawal,Arial';
+  rows.forEach(function(r,i){ var y=180+i*52;
+    c.textAlign='right';c.fillStyle='#94a3b8';c.fillText(r[0],W-150,y);
+    c.textAlign='left'; c.fillStyle='#f1f5f9';c.fillText(String(r[1]),150,y);
+  });
+  c.textAlign='center';c.font='900 44px Tajawal,Arial';c.fillStyle='#fbbf24';
+  c.fillText('التقييم: '+'⭐'.repeat(stars)+'  '+grade,W/2,572);
+  /* buttons */
+  drawBtn(c,W/2+ (0.5/2.1*W),628,'الخروج','#475569');
+  drawBtn(c,W/2- (0.5/2.1*W),628,'تدريب مجدداً','#16a34a');
+  report.tex.needsUpdate=true;
+}
+function drawBtn(c,cx,cy,label,col){
+  c.fillStyle=col; rrect(c,cx-150,cy-32,300,64,16); c.fill();
+  c.fillStyle='#fff';c.font='900 30px Tajawal,Arial';c.textAlign='center';c.textBaseline='middle';
+  c.fillText(label,cx,cy); c.textBaseline='alphabetic';
+}
+function rrect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);
+  c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+function showReport(){ state.mode='report'; drawReport(); report.visible=true; }
+function hideReport(){ if(report)report.visible=false; }
+
+/* ═══════════ SHOOTING ═══════════ */
+function aimRay(){
+  lab.camera.getWorldPosition(vTmpO);
+  lab.camera.getWorldDirection(vTmpD);          /* gaze forward */
+  var W=WEAPONS[state.weapon];
+  var sp=W.spreadDeg*Math.PI/180;
+  var yaw=(Math.random()*2-1)*sp + state.windX;  /* spread + wind drift */
+  var pit=(Math.random()*2-1)*sp;
+  vTmpD.applyAxisAngle(new THREE.Vector3(0,1,0),yaw);
+  vTmpD.applyAxisAngle(new THREE.Vector3(1,0,0),pit);
+  vTmpD.normalize();
+  ray.set(vTmpO,vTmpD);
+}
+function fire(){
+  var now=performance.now();
+  if(now-state.lastShot < WEAPONS[state.weapon].rateMs)return;
+  if(state.ammo<=0){ reload(); return; }
+  state.lastShot=now;
+  state.ammo--; state.shots++;
+  /* recoil + muzzle flash + sound */
+  state.recoilV += WEAPONS[state.weapon].recoil;
+  if(muzzle){muzzle.visible=true;muzzle.material.opacity=.9;muzzle._t=0.05;}
+  lab.audio&&lab.audio.blip&&lab.audio.blip(state.weapon==='M9'?320:240,.06,'square',.22);
+
+  aimRay();
+  var hit=ray.intersectObjects(pickables.filter(function(p){return p.userData.target;}),false)[0];
+  if(hit&&hit.uv){
+    var t=hit.object.userData.target;
+    var lx=(hit.uv.x-0.5)*t.size, ly=(hit.uv.y-0.5)*t.size;
+    var f=Math.hypot(lx,ly)/(t.size/2);
+    var score=0;
+    for(var i=0;i<SCORE_RINGS.length;i++){ if(f<=SCORE_RINGS[i].f){score=SCORE_RINGS[i].score;break;} }
+    if(score>0){
+      state.hits++; state.points+=score; if(score===10)state.bullseyes++;
+      addHole(t,lx,ly); t.flash.material.opacity=.7;
+      lab.audio&&lab.audio.blip&&lab.audio.blip(660+score*30,.09,'sine',.25);
+    }else miss();
+  }else miss();
+  refreshHUD();
+  if(state.ammo<=0)showMsg('إعادة التعبئة — اضغط الزناد','#fbbf24',9);
+}
+function miss(){
+  showMsg('خطأ','#f87171',.7);
+  lab.audio&&lab.audio.blip&&lab.audio.blip(140,.12,'sawtooth',.2);
+}
+function addHole(t,lx,ly){
+  var hole=new THREE.Mesh(new THREE.CircleGeometry(t.size*.022,10),
+    new THREE.MeshBasicMaterial({color:0x7f1d1d}));
+  hole.position.set(lx,ly,.012); t.group.add(hole);
+}
+function reload(){
+  state.ammo=WEAPONS[state.weapon].mag;
+  showMsg('تمت إعادة التعبئة','#34d399',1);
+  lab.audio&&lab.audio.click&&lab.audio.click();
+  refreshHUD();
+}
+
+/* ═══════════ HUD ═══════════ */
+function refreshHUD(){
+  var acc=state.shots?Math.round(state.hits/state.shots*100):0;
+  document.getElementById('s-weapon').textContent=WEAPONS[state.weapon].name;
+  document.getElementById('s-ammo').textContent=state.ammo+' / '+WEAPONS[state.weapon].mag;
+  document.getElementById('s-hits').textContent=state.hits;
+  document.getElementById('s-acc').textContent=acc+'%';
+  document.getElementById('s-pts').textContent=state.points;
+  document.getElementById('s-shots').textContent=state.shots;
+}
+
+/* ═══════════ INPUT ═══════════ */
+function onTrigger(ctrl){
+  if(state.mode==='report'){ castController(ctrl); return; }
+  if(state.mode==='play') fire();
+}
+function castController(ctrl){
+  tmpM.identity().extractRotation(ctrl.matrixWorld);
+  vTmpO.setFromMatrixPosition(ctrl.matrixWorld);
+  vTmpD.set(0,0,-1).applyMatrix4(tmpM).normalize();
+  ray.set(vTmpO,vTmpD);
+  var h=ray.intersectObjects(reportBtns,false)[0];
+  if(h)handleReport(h.object.userData.report);
+}
+function castMouse(ev){
+  var n=new THREE.Vector2((ev.clientX/innerWidth)*2-1,-(ev.clientY/innerHeight)*2+1);
+  ray.setFromCamera(n,lab.camera);
+  var h=ray.intersectObjects(reportBtns,false)[0];
+  if(h)handleReport(h.object.userData.report);
+}
+function handleReport(which){
+  if(which==='again'){ startTraining(state.weapon,state.range); }
+  else { state.mode='select'; hideReport(); document.body.classList.remove('training'); selDiv.style.display='flex'; }
+}
+function wireInput(){
+  var down=null, el=lab.renderer.domElement;
+  el.addEventListener('pointerdown',function(e){down={x:e.clientX,y:e.clientY};});
+  el.addEventListener('pointerup',function(e){
+    if(down&&Math.hypot(e.clientX-down.x,e.clientY-down.y)<5){
+      if(state.mode==='report')castMouse(e);
+      else if(state.mode==='play')fire();
+    } down=null;
+  });
+  document.getElementById('btn-reload').onclick=reload;
+  document.getElementById('btn-range').onclick=function(){
+    var keys=Object.keys(RANGES), i=keys.indexOf(state.range);
+    state.range=keys[(i+1)%keys.length]; buildRange(state.range); refreshHUD();
+  };
+  document.getElementById('btn-end').onclick=showReport;
+}
+
+/* ═══════════ FRAME LOOP ═══════════ */
+function frame(dt,t){
+  if(!rangeRoot)return;
+  /* recoil decay (kick weapon back along +z, settle) */
+  if(weaponGroup){
+    weaponGroup.position.z = -0.42 + state.recoilV;
+    weaponGroup.rotation.x = state.recoilV*1.6;
+    state.recoilV *= Math.max(0,1-dt*12);
+    if(state.recoilV<0.0005)state.recoilV=0;
+  }
+  if(muzzle&&muzzle.visible){ muzzle._t-=dt; if(muzzle._t<=0)muzzle.visible=false; }
+  /* message fade */
+  if(msgTimer>0){ msgTimer-=dt; if(msgTimer<=0)msgSprite.material.opacity=0;
+    else if(msgTimer<.4)msgSprite.material.opacity=msgTimer/.4; }
+  /* target motion / blink / flash */
+  targets.forEach(function(tg){
+    if(tg.move)tg.group.position.x=tg.move.baseX+Math.sin(t*tg.move.speed+tg.move.phase)*tg.move.amp;
+    if(tg.blink)tg.group.visible=(Math.floor(t/3+tg.blink.phase)%2===0);
+    if(tg.flash.material.opacity>0)tg.flash.material.opacity=Math.max(0,tg.flash.material.opacity-dt*3.5);
+  });
+  /* wind drift (day only), wanders slowly */
+  if(RANGES[state.range].wind){
+    state.windX=Math.sin(t*0.4)*0.5*WIND_MAX*0.02 + Math.sin(t*0.13)*0.5*WIND_MAX*0.02;
+  }else state.windX=0;
+}
+
+})();
+</script>
+</body>
+</html>
