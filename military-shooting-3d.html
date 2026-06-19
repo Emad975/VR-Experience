@@ -260,27 +260,69 @@ function mountSights(c){
     rpst.position.copy(rp); rpst.position.x+=dx; sightAid.add(rpst); });
 }
 
+/* Detailed procedural models from Three.js primitives (no external file).
+   Recognisable silhouettes; the real .glb (when supplied) replaces these. */
 function buildPrimitive(key){
-  var metal=new THREE.MeshStandardMaterial({color:0x23262c,roughness:.5,metalness:.7});
-  var poly =new THREE.MeshStandardMaterial({color:0x14171c,roughness:.75,metalness:.2});
+  var metal=new THREE.MeshStandardMaterial({color:0x26282b,roughness:.55,metalness:.6}); /* parkerized */
+  var poly =new THREE.MeshStandardMaterial({color:0x111317,roughness:.88,metalness:.04});/* black furniture */
+  var dark =new THREE.MeshStandardMaterial({color:0x0a0b0d,roughness:.7,metalness:.3});
   function box(w,h,d,x,y,z,m){var e=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m||metal);e.position.set(x,y,z);modelHolder.add(e);return e;}
-  function cyl(r,h,x,y,z,m){var e=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,14),m||metal);e.rotation.x=Math.PI/2;e.position.set(x,y,z);modelHolder.add(e);return e;}
+  function cyl(r1,r2,h,x,y,z,m){var e=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,16),m||metal);e.rotation.x=Math.PI/2;e.position.set(x,y,z);modelHolder.add(e);return e;}
+  function tor(R,t,x,y,z,m,ax){var e=new THREE.Mesh(new THREE.TorusGeometry(R,t,10,20),m||metal);if(ax==='x')e.rotation.y=Math.PI/2;e.position.set(x,y,z);modelHolder.add(e);return e;}
+
   if(key==='M9'){
-    box(.05,.06,.20,0,.02,-.05,metal);          /* slide */
-    box(.045,.05,.14,0,.0,-.02,metal);           /* frame */
-    box(.05,.11,.055,0,-.075,.02,poly).rotation.x=.22; /* grip */
-    cyl(.011,.10,0,.02,-.16,metal);              /* barrel */
-    box(.03,.025,.04,0,-.04,-.02,poly);          /* trigger guard front */
+    /* Beretta 92 — open-slide silhouette */
+    box(.026,.052,.205,0,.022,-.05,metal);                 /* slide */
+    cyl(.011,.011,.20,0,.04,-.05,dark);                    /* exposed barrel on top */
+    cyl(.014,.014,.03,0,.04,-.17,dark);                    /* muzzle crown */
+    box(.03,.05,.135,0,-.012,-.015,metal);                 /* frame */
+    var g9=box(.034,.11,.052,0,-.075,.028,poly); g9.rotation.x=.20; /* grip */
+    box(.006,.085,.046,.018,-.07,.03,dark).rotation.x=.20; /* grip panel R */
+    box(.006,.085,.046,-.018,-.07,.03,dark).rotation.x=.20;/* grip panel L */
+    tor(.02,.0035,0,-.038,-.045,metal,'x');                /* trigger guard */
+    box(.008,.02,.012,0,-.03,-.045,dark);                  /* trigger */
+    box(.016,.016,.018,0,.05,.055,metal);                  /* hammer */
+    box(.01,.012,.012,0,.052,-.02,dark);                   /* rear sight */
+    box(.008,.012,.008,0,.052,-.165,dark);                 /* front sight */
   }else{
-    box(.05,.07,.30,0,0,-.12,metal);             /* upper receiver */
-    box(.045,.055,.16,0,-.005,.10,poly);         /* lower/buffer */
-    box(.05,.085,.14,0,.0,.20,poly);             /* stock */
-    box(.05,.10,.05,0,-.075,-.02,poly).rotation.x=.18; /* pistol grip */
-    box(.04,.12,.05,0,-.085,-.07,poly);          /* magazine */
-    cyl(.028,.26,0,.0,-.36,poly);                /* handguard */
-    cyl(.012,.34,0,.0,-.45,metal);               /* barrel */
-    box(.05,.04,.10,0,.085,-.02,metal);          /* carry handle base */
-    cyl(.006,.02,0,.11,-.55,metal);              /* front sight tower */
+    /* M16A2 — carry handle, A2 front sight tower, ribbed handguard,
+       birdcage flash hider, A2 stock, curved magazine */
+    box(.042,.058,.15,0,-.004,-.02,metal);                 /* lower receiver */
+    box(.044,.05,.22,0,.03,-.13,metal);                    /* upper receiver */
+    box(.012,.012,.05,0,.05,.04,metal);                    /* charging handle */
+    box(.05,.022,.05,.028,.028,-.06,metal);                /* ejection port / fwd assist side */
+    /* A2 carry handle (bridge + rear sight housing) */
+    box(.006,.05,.135,.02,.085,-.07,metal);                /* handle wall R */
+    box(.006,.05,.135,-.02,.085,-.07,metal);               /* handle wall L */
+    box(.05,.014,.145,0,.108,-.07,metal);                  /* handle top */
+    box(.05,.034,.04,0,.10,-.018,metal);                   /* rear sight housing */
+    box(.014,.014,.012,0,.108,-.03,dark);                  /* rear aperture block */
+    /* A2 buttstock */
+    var st=box(.05,.082,.17,0,-.004,.185,poly); st.rotation.x=-.02;
+    box(.052,.10,.018,0,-.006,.275,poly);                  /* buttplate */
+    cyl(.018,.018,.06,0,-.004,.085,dark);                  /* receiver extension collar */
+    /* A2 pistol grip */
+    var pg=box(.03,.10,.05,0,-.072,-.005,poly); pg.rotation.x=.30;
+    box(.012,.03,.022,0,-.028,-.04,dark);                  /* grip tang */
+    tor(.022,.004,0,-.04,-.05,metal,'x');                  /* trigger guard */
+    box(.008,.022,.012,0,-.03,-.05,dark);                  /* trigger */
+    /* curved magazine (two angled segments) */
+    var m1=box(.038,.085,.05,0,-.085,-.05,poly); m1.rotation.x=.10;
+    var m2=box(.038,.06,.05,0,-.15,-.062,poly); m2.rotation.x=.22;
+    box(.046,.05,.058,0,-.035,-.05,metal);                 /* magazine well */
+    /* ribbed handguard (oval) with delta ring */
+    var hg=cyl(.034,.034,.24,0,-.004,-.31,poly); hg.scale.y=.82;
+    for(var r=-.20;r>-.42;r-=.035){ tor(.035,.004,0,-.004,r,poly).scale.y=.82; } /* ribs */
+    tor(.038,.006,0,-.004,-.185,metal);                    /* delta ring */
+    /* barrel + A2 front sight tower (with wings + post) + birdcage */
+    cyl(.011,.011,.5,0,0,-.45,dark);                       /* barrel */
+    box(.026,.07,.045,0,.05,-.55,metal);                   /* FSB tower */
+    box(.006,.05,.012,.012,.10,-.55,metal);                /* sight ear R */
+    box(.006,.05,.012,-.012,.10,-.55,metal);               /* sight ear L */
+    box(.004,.05,.004,0,.10,-.55,dark);                    /* front sight post */
+    cyl(.012,.012,.04,0,0,-.49,metal);                     /* sight base collar */
+    cyl(.017,.017,.05,0,0,-.625,dark);                     /* birdcage flash hider */
+    box(.01,.012,.05,0,-.03,-.42,metal);                   /* front sling swivel base */
   }
 }
 
