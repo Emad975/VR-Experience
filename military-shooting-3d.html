@@ -231,13 +231,37 @@ function loadWeapon(key){
   if(W.glb&&W.glb.url){
     gltf.load(W.glb.url,function(g){
       if(state.weapon!==key)return;
-      clearHolder();
-      var m=g.scene; m.scale.setScalar(W.glb.scale);
+      var m=g.scene;
       m.rotation.set(W.glb.rot[0],W.glb.rot[1],W.glb.rot[2]);
-      modelHolder.add(m); calib=W.glb; mountSights(calib);
-      showMsg('تم تحميل مجسّم '+W.name,'#34d399',1.2);
+      m.updateMatrixWorld(true);
+      /* auto-fit: scale longest axis to a realistic length */
+      var bb0=new THREE.Box3().setFromObject(m), s0=new V3(); bb0.getSize(s0);
+      var longest=Math.max(s0.x,s0.y,s0.z)||1;
+      m.scale.setScalar((W.twoHand?0.95:0.22)/longest);
+      clearHolder(); modelHolder.add(m);
+      /* measure in rig-local space (temporarily neutralise the live pose) */
+      var pr=rig.position.clone(), pq=rig.quaternion.clone();
+      rig.position.set(0,0,0); rig.quaternion.identity();
+      recoilNode.position.set(0,0,0); recoilNode.rotation.set(0,0,0);
+      modelHolder.position.set(0,0,0); rig.updateMatrixWorld(true);
+      calib=deriveCalib(new THREE.Box3().setFromObject(m));
+      rig.position.copy(pr); rig.quaternion.copy(pq);
+      mountSights(calib);
+      showMsg('تم تحميل مجسّم '+W.name,'#34d399',1.6);
     },undefined,function(){ /* missing/blocked → keep primitive (expected on file://) */ });
   }
+}
+/* derive hand/sight/barrel anchors from a fitted model's bounding box,
+   assuming the barrel points along -Z (set glb.rot to make it so). */
+function deriveCalib(bb){
+  var sz=new V3(); bb.getSize(sz); var c=new V3(); bb.getCenter(c);
+  return {
+    grip:      [c.x, bb.min.y+sz.y*0.22, bb.max.z-sz.z*0.27],
+    foreGrip:  [c.x, c.y,                bb.min.z+sz.z*0.30],
+    barrelTip: [c.x, c.y+sz.y*0.10,      bb.min.z],
+    frontSight:[c.x, bb.max.y-sz.y*0.05, bb.min.z+sz.z*0.14],
+    rearSight: [c.x, bb.max.y-sz.y*0.05, bb.max.z-sz.z*0.34]
+  };
 }
 
 function mountSights(c){
